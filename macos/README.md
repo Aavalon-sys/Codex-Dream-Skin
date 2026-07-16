@@ -47,6 +47,6 @@ npm test
 ./scripts/build-client-release.sh "/path/to/灰泽满-Hazel-Codex-macOS.zip"
 ```
 
-颜色、语录和图片出处见 [references/asset-sources.md](references/asset-sources.md)。角色素材只用于个人本机主题，不应随源码公开再分发或用于商业用途。
+颜色、语录和图片出处见 [references/asset-sources.md](references/asset-sources.md)。角色素材不纳入本项目 MIT 许可，仅用于非商业同人主题展示；二次使用者应自行确认授权范围。
 
 本项目为非官方个性化工具，与 OpenAI、灰泽满或 VirtuaReal 无隶属、赞助或背书关系。
