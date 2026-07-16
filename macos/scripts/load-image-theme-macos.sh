@@ -88,7 +88,8 @@ esac
   --name "$THEME_NAME" \
   --tagline "dynamic pure background" \
   --quote "MAKE SOMETHING WONDERFUL" \
-  --accent "#E25563" --secondary "#F3A8AF" --highlight "#C93D4C" >/dev/null
+  --accent "#5C968E" --accent-alt "#7FAFA7" \
+  --secondary "#D3D3D3" --highlight "#D89BA9" >/dev/null
 
 lib_dir="$THEMES_ROOT/$theme_id"
 /bin/mkdir -p "$lib_dir"

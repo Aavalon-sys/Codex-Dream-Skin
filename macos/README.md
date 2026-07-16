@@ -1,120 +1,52 @@
-# Codex Dream Skin Studio
+# 灰泽满 Hazel × Codex 主题
 
-Unofficial macOS theme studio for the **official Codex Desktop** app.
+个人本机使用的 macOS Codex Desktop 主题。它以应援灰 `#D3D3D3` 为基底、以“绿冻”色 `#5C968E` 为交互强调色，使用官方动态中的灰泽满立绘，并保留 Codex 的原生侧栏、项目选择器、建议卡片、任务内容和输入框。
 
-Turn an image you like into a Codex theme: a dedicated home banner, a low-noise task background, and frosted content layers — while **keeping native sidebar, suggestion cards, project picker, task content, menus, and composer** fully interactive.
+主题基于 Codex Dream Skin Studio 的本地回环 CDP 注入方案，不修改 `Codex.app`、`app.asar` 或应用签名。
 
-This project injects through **local loopback CDP**. It does **not** modify the official `.app`, `app.asar`, or code signature.
+## 安装
 
-> Not affiliated with OpenAI. Codex is a trademark of its respective owners.
+双击 `install-hazel.command`。安装器会：
 
-## Requirements
+1. 验证官方 Codex 应用、签名及其内置 Node.js。
+2. 备份已有 Dream Skin 引擎和主题。
+3. 安装到 `~/.codex/codex-dream-skin-studio`。
+4. 将 Hazel 主题写入 `~/Library/Application Support/CodexDreamSkinStudio/theme`。
+5. 若 Codex 已在运行，通过系统对话框询问是否重启后应用。
 
-- macOS
-- Official Codex Desktop installed and launched at least once (`~/.codex/config.toml` exists)
-- No global Node.js install required (uses Codex’s signed bundled Node after validation)
-
-## Quick start (from this repo)
+也可以只安装、不启动：
 
 ```bash
-# 1) Optional static checks (needs Codex.app present for bundled Node path)
-./tests/run-tests.sh
-
-# 2) Install to the stable path and create Desktop launchers
 ./scripts/install-dream-skin-macos.sh --no-launch
-
-# 3) Customize with your image (Finder picker if you omit flags)
-~/.codex/codex-dream-skin-studio/scripts/customize-theme-macos.sh
-
-# 4) Start / re-apply, verify, or restore via Desktop:
-#    Codex Dream Skin.command
-#    Codex Dream Skin - Customize.command
-#    Codex Dream Skin - Verify.command
-#    Codex Dream Skin - Restore.command
-
-# 5) Optional: menu bar (SwiftBar) — apply / pause / change image
-./Install\ Menu\ Bar.command
-# Look for 🎨 Skin in the top-right menu bar
 ```
 
-Install location after step 2:
+桌面会生成：
 
-| Item | Path |
-| --- | --- |
-| Engine | `~/.codex/codex-dream-skin-studio` |
-| State / logs / user images | `~/Library/Application Support/CodexDreamSkinStudio` |
-| Theme backup | under Application Support (`theme-backup.json`) |
+- `Hazel Codex Theme.command`：启动或重新应用主题。
+- `Hazel Codex Theme - Verify.command`：检查注入状态并保存验收截图。
+- `Hazel Codex Theme - Restore.command`：恢复官方外观并正常重启 Codex。
 
-## Customer ZIP (optional packaging)
+## manqu 宠物
 
-To build the “double-click install” folder layout for non-git users:
+主题不打包或替换 manqu。装饰层均不可点击，并在窗口底部保留 180px 的无主题装饰活动带；manqu 仍由 Codex 的 Pets 设置独立启用。
+
+## 卸载和恢复
+
+双击 `uninstall-hazel.command`。如果主题当前通过已验证的本地 CDP 端点运行，它会在不关闭 Codex 的情况下移除注入；如果无法安全验证运行中的 Codex，脚本会停止并要求显式重启授权。
+
+完整恢复入口：
 
 ```bash
-./scripts/build-client-release.sh "$HOME/Desktop/Codex 主题编辑器.zip"
+./scripts/restore-dream-skin-macos.sh --restore-base-theme --restart-codex --uninstall
 ```
 
-That ZIP contains a visible installer plus a hidden `.codex-dream-skin-studio` engine. Do not ship only CSS/images.
-
-## How it works (security boundary)
-
-1. Discover `com.openai.codex` and validate signature / Team ID / arch / bundled Node.
-2. Start Codex via user `launchd` with CDP bound to `127.0.0.1` only.
-3. Accept the debug port only when it belongs to Codex (or a legitimate child).
-4. Inject only into expected `app://` renderer targets.
-5. Keep a small injector alive across reloads and route changes.
-6. Restore stops the injector only when PID, path, and start time match the recorded job.
-
-CDP is powerful and unauthenticated on loopback. Prefer Restore when you are done theming.
-
-## Image guidelines
-
-- PNG / JPEG / HEIC / TIFF / WebP (macOS readable)
-- Source ≤ 50 MB; prepared file ≤ 16 MB
-- Wide images work best (width ≥ 2000 px recommended)
-- Keep the left side relatively calm for native home titles
-- Image is banner + background only — never a full-window fake UI overlay
-
-CLI example:
+## 开发与打包
 
 ```bash
-~/.codex/codex-dream-skin-studio/scripts/customize-theme-macos.sh \
-  --image "/path/to/image.png" \
-  --name "My theme" \
-  --accent "#7cff46" \
-  --secondary "#36d7e8" \
-  --highlight "#642a8c"
+npm test
+./scripts/build-client-release.sh "/path/to/灰泽满-Hazel-Codex-macOS.zip"
 ```
 
-Reset to the bundled abstract demo:
+颜色、语录和图片出处见 [references/asset-sources.md](references/asset-sources.md)。角色素材只用于个人本机主题，不应随源码公开再分发或用于商业用途。
 
-```bash
-~/.codex/codex-dream-skin-studio/scripts/customize-theme-macos.sh --reset-demo
-```
-
-## License
-
-MIT — see `LICENSE`. Additional notices in `NOTICE.md` (trademarks, demo asset, runtime Node).
-
-## Sponsors
-
-Thanks to **[passion8.cc](https://passion8.cc/register?aff=TuPe)** for sponsoring this project.
-
-<p align="center">
-  <a href="https://passion8.cc/register?aff=TuPe">
-    <img src="../docs/images/sponsor-passion8.png" alt="Passion8" height="96">
-  </a>
-</p>
-
-<p align="center">
-  <a href="https://passion8.cc/register?aff=TuPe"><strong>Passion8｜感谢 passion8.cc 赞助本项目</strong></a><br>
-  AI API 中转站，支持 Codex / Claude Code / Grok 等工具接入。主题与 API 配置互相独立。
-</p>
-
-## What this is not
-
-- Not an OpenAI product and not a fork of Codex source
-- Not a way to patch or rebrand the official binary
-- Not a Windows build (see `../windows/`)
-- Not an API proxy: theming does not change model providers or API keys
-
-If you use a third-party API relay, configure it separately — keep theme install and API config as two explicit steps.
+本项目为非官方个性化工具，与 OpenAI、灰泽满或 VirtuaReal 无隶属、赞助或背书关系。

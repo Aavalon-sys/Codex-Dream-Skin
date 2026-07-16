@@ -22,13 +22,17 @@ for required in \
   [ -s "$required" ] || fail "Required project file is missing or empty: $required"
 done
 
-PAYLOAD_JSON="$("$NODE" "$INJECTOR" --check-payload --theme-dir "$THEME_DIR")"
+if [ -f "$THEME_DIR/theme.json" ]; then
+  PAYLOAD_JSON="$("$NODE" "$INJECTOR" --check-payload --theme-dir "$THEME_DIR")"
+else
+  PAYLOAD_JSON="$("$NODE" "$INJECTOR" --check-payload)"
+fi
 PORT=9341
 if [ -f "$STATE_PATH" ]; then
   PORT="$(state_field port)"
 fi
 LIVE="false"
-if [ -f "$STATE_PATH" ] && verified_cdp_endpoint "$PORT"; then
+if [ -f "$STATE_PATH" ] && [ -f "$THEME_DIR/theme.json" ] && verified_cdp_endpoint "$PORT"; then
   "$NODE" "$INJECTOR" --verify --port "$PORT" --theme-dir "$THEME_DIR" --timeout-ms 12000 >/dev/null
   LIVE="true"
 fi

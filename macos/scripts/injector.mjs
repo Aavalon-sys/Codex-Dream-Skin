@@ -4,9 +4,10 @@ import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..");
-const SKIN_VERSION = "1.1.2";
+const SKIN_VERSION = "1.2.0-hazel.1";
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
 const MAX_ART_BYTES = 16 * 1024 * 1024;
+const MAX_STICKER_BYTES = 4 * 1024 * 1024;
 
 function parseArgs(argv) {
   const options = {
@@ -228,29 +229,81 @@ async function loadTheme(themeDir) {
       ? normalized
       : fallback;
   };
+  const palette = (source, fallback) => ({
+    background: color(source?.background, fallback.background),
+    panel: color(source?.panel, fallback.panel),
+    panelAlt: color(source?.panelAlt, fallback.panelAlt),
+    accent: color(source?.accent, fallback.accent),
+    accentAlt: color(source?.accentAlt, fallback.accentAlt),
+    secondary: color(source?.secondary, fallback.secondary),
+    highlight: color(source?.highlight, fallback.highlight),
+    text: color(source?.text, fallback.text),
+    muted: color(source?.muted, fallback.muted),
+    line: color(source?.line, fallback.line),
+  });
+  const lightFallback = {
+    background: "#f3f2f2",
+    panel: "rgba(255, 255, 255, 0.82)",
+    panelAlt: "#e8ebea",
+    accent: "#5c968e",
+    accentAlt: "#7fafa7",
+    secondary: "#d3d3d3",
+    highlight: "#d89ba9",
+    text: "#26312f",
+    muted: "#65716f",
+    line: "rgba(92, 150, 142, 0.25)",
+  };
+  const darkFallback = {
+    background: "#171a1a",
+    panel: "rgba(31, 38, 37, 0.90)",
+    panelAlt: "#29302f",
+    accent: "#8fbfb6",
+    accentAlt: "#a5cec6",
+    secondary: "#d3d3d3",
+    highlight: "#d8a0ad",
+    text: "#f2f4f3",
+    muted: "#b7c1bf",
+    line: "rgba(143, 191, 182, 0.30)",
+  };
+  const quote = text(raw.quote, "MAKE SOMETHING WONDERFUL", 120);
+  const cornerQuotes = Array.isArray(raw.cornerQuotes)
+    ? raw.cornerQuotes.map((item) => text(item, "", 180)).filter(Boolean).slice(0, 3)
+    : [];
+  if (!cornerQuotes.length) cornerQuotes.push(quote);
+  const imagePosition = ["left", "center", "right"].includes(raw.imagePosition)
+    ? raw.imagePosition : "right";
+  const requestedSafeHeight = Number(raw.petSafeArea?.minHeight);
+  const petSafeHeight = Number.isFinite(requestedSafeHeight)
+    ? Math.max(0, Math.min(320, Math.round(requestedSafeHeight))) : 0;
+  const sticker = typeof raw.sticker === "string" && raw.sticker.trim()
+    ? raw.sticker.trim() : null;
+  if (sticker && path.basename(sticker) !== sticker) {
+    throw new Error("Theme sticker must stay inside its theme directory");
+  }
+  const themeName = text(raw.name, "Codex Dream Skin", 80);
+  const tagline = text(raw.tagline, "Make something wonderful.", 160);
   const theme = {
     schemaVersion: 1,
     id: text(raw.id, "custom", 80),
-    name: text(raw.name, "Codex Dream Skin", 80),
+    name: themeName,
     brandSubtitle: text(raw.brandSubtitle, "CODEX DREAM SKIN", 80),
-    tagline: text(raw.tagline, "Make something wonderful.", 160),
+    heroTitle: text(raw.heroTitle, themeName, 80),
+    heroSubtitle: text(raw.heroSubtitle, tagline, 180),
+    tagline,
     projectPrefix: text(raw.projectPrefix, "选择项目 · ", 80),
     projectLabel: text(raw.projectLabel, "◉  选择项目", 80),
     statusText: text(raw.statusText, "DREAM SKIN ONLINE", 80),
-    quote: text(raw.quote, "MAKE SOMETHING WONDERFUL", 80),
+    quote,
+    cornerQuotes,
     image: raw.image,
-    colors: {
-      background: color(raw.colors?.background, "#071116"),
-      panel: color(raw.colors?.panel, "#0b1a20"),
-      panelAlt: color(raw.colors?.panelAlt, "#10272c"),
-      accent: color(raw.colors?.accent, "#7cff46"),
-      accentAlt: color(raw.colors?.accentAlt, "#b8ff3d"),
-      secondary: color(raw.colors?.secondary, "#36d7e8"),
-      highlight: color(raw.colors?.highlight, "#642a8c"),
-      text: color(raw.colors?.text, "#e9fff1"),
-      muted: color(raw.colors?.muted, "#9ebdb3"),
-      line: color(raw.colors?.line, "rgba(124, 255, 70, .28)"),
+    sticker,
+    imagePosition,
+    petSafeArea: {
+      edge: raw.petSafeArea?.edge === "bottom" ? "bottom" : "bottom",
+      minHeight: petSafeHeight,
     },
+    colors: palette(raw.colors, lightFallback),
+    darkColors: palette(raw.darkColors, darkFallback),
   };
   const imagePath = path.join(assetsRoot, theme.image);
   const imageStat = await fs.stat(imagePath);
@@ -261,7 +314,20 @@ async function loadTheme(themeDir) {
   if (![".png", ".jpg", ".jpeg", ".webp"].includes(extension)) {
     throw new Error(`Unsupported theme image format: ${extension || "missing"}`);
   }
-  return { assetsRoot, imagePath, imageStat, theme };
+  let stickerPath = null;
+  let stickerStat = null;
+  if (theme.sticker) {
+    stickerPath = path.join(assetsRoot, theme.sticker);
+    stickerStat = await fs.stat(stickerPath);
+    const stickerExtension = path.extname(theme.sticker).toLowerCase();
+    if (!stickerStat.isFile() || stickerStat.size < 1 || stickerStat.size > MAX_STICKER_BYTES) {
+      throw new Error(`Theme sticker must be a non-empty file no larger than ${MAX_STICKER_BYTES} bytes`);
+    }
+    if (![".png", ".webp"].includes(stickerExtension)) {
+      throw new Error(`Unsupported theme sticker format: ${stickerExtension || "missing"}`);
+    }
+  }
+  return { assetsRoot, imagePath, imageStat, stickerPath, stickerStat, theme };
 }
 
 async function loadPayload(themeDir) {
@@ -270,18 +336,23 @@ async function loadPayload(themeDir) {
     fs.readFile(path.join(root, "assets", "renderer-inject.js"), "utf8"),
     loadTheme(themeDir),
   ]);
-  const { imagePath, theme } = loaded;
-  const art = await fs.readFile(imagePath);
-  const extension = path.extname(imagePath).toLowerCase();
-  const mime = extension === ".jpg" || extension === ".jpeg" ? "image/jpeg"
-    : extension === ".webp" ? "image/webp" : "image/png";
-  const artDataUrl = `data:${mime};base64,${art.toString("base64")}`;
+  const { imagePath, stickerPath, theme } = loaded;
+  const toDataUrl = async (file) => {
+    if (!file) return { bytes: 0, dataUrl: "" };
+    const data = await fs.readFile(file);
+    const extension = path.extname(file).toLowerCase();
+    const mime = extension === ".jpg" || extension === ".jpeg" ? "image/jpeg"
+      : extension === ".webp" ? "image/webp" : "image/png";
+    return { bytes: data.length, dataUrl: `data:${mime};base64,${data.toString("base64")}` };
+  };
+  const [art, sticker] = await Promise.all([toDataUrl(imagePath), toDataUrl(stickerPath)]);
   const payload = template
     .replace("__DREAM_SKIN_CSS_JSON__", JSON.stringify(css))
-    .replace("__DREAM_SKIN_ART_JSON__", JSON.stringify(artDataUrl))
+    .replace("__DREAM_SKIN_ART_JSON__", JSON.stringify(art.dataUrl))
+    .replace("__DREAM_SKIN_STICKER_JSON__", JSON.stringify(sticker.dataUrl))
     .replace("__DREAM_SKIN_THEME_JSON__", JSON.stringify(theme))
     .replace("__DREAM_SKIN_VERSION_JSON__", JSON.stringify(SKIN_VERSION));
-  return { imageBytes: art.length, payload, theme };
+  return { imageBytes: art.bytes, stickerBytes: sticker.bytes, payload, theme };
 }
 
 async function applyToSession(session, payload) {
@@ -360,13 +431,16 @@ async function verifySession(session) {
       result.stylePresent && result.chromePresent && result.chromePointerEvents === 'none' &&
       Boolean(result.composer?.visible) && Boolean(result.sidebar?.visible) && !result.documentOverflow.x;
     // Project selector markup varies across Codex builds — soft requirement.
+    const homeHasNativeActions = result.visibleCardCount >= 1 ||
+      Boolean(result.projectButton?.visible) || Boolean(result.composer?.visible);
     const homePass = !result.homeRoute || (
       result.homePresent && result.hero?.visible && result.hero.width >= 280 && result.hero.height >= 120 &&
-      result.visibleCardCount >= 1 && result.visibleCardCount <= 6
+      result.visibleCardCount <= 6 && homeHasNativeActions
     );
     result.pass = Boolean(basePass && homePass);
     result.softNotes = {
       projectButtonOptional: !result.projectButton?.visible,
+      suggestionCardsAbsent: result.visibleCardCount === 0,
     };
     return result;
   })()`);
@@ -510,7 +584,13 @@ try {
       version: SKIN_VERSION,
       themeId: loaded.theme.id,
       themeName: loaded.theme.name,
+      heroTitle: loaded.theme.heroTitle,
+      heroSubtitle: loaded.theme.heroSubtitle,
+      cornerQuoteCount: loaded.theme.cornerQuotes.length,
+      imagePosition: loaded.theme.imagePosition,
+      petSafeHeight: loaded.theme.petSafeArea.minHeight,
       imageBytes: loaded.imageBytes,
+      stickerBytes: loaded.stickerBytes,
       payloadBytes: Buffer.byteLength(loaded.payload),
     }, null, 2));
   } else if (options.mode === "watch") await runWatch(options);

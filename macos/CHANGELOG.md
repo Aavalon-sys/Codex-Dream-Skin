@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.0-hazel.1 — 2026-07-16
+
+- Add the Hazel-specific light gray and mint visual system with a dark fallback.
+- Add optional hero copy, multiple corner quotes, image position, sticker, and pet-safe-area theme fields.
+- Seed and back up the bundled theme during installation; add Hazel launch, verify, and restore entries.
+- Add official-source provenance, manqu-safe decoration boundaries, and Hazel payload regression tests.
+
 ## 1.1.2 — 2026-07-16
 
 ### 修复

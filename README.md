@@ -1,5 +1,7 @@
 # Codex Dream Skin
 
+> **灰泽满 Hazel 私人定制版**：macOS 源码位于 [`macos/`](./macos/)，双击安装包发布在 [Releases](https://github.com/Aavalon-sys/hazel-codex-theme/releases)。本仓库保留 [Fei-Away/Codex-Dream-Skin](https://github.com/Fei-Away/Codex-Dream-Skin) 的完整历史，角色素材仅限仓库所有者个人本机使用，请勿公开再分发。
+
 <p align="center">
   <strong>中文</strong> · <a href="./README.en.md">English</a>
 </p>
