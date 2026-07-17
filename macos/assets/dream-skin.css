@@ -194,7 +194,8 @@ html.codex-dream-skin main.main-surface > header.app-header-tint {
 .dream-skin-status {
   position: absolute;
   right: 82px;
-  top: 12px;
+  top: 3px;
+  height: 40px;
   display: none;
   align-items: center;
   gap: 7px;
@@ -215,15 +216,21 @@ html.codex-dream-skin main.main-surface > header.app-header-tint {
 
 .dream-skin-quote {
   position: absolute;
-  right: 28px;
-  top: 66px;
+  left: 56%;
+  right: auto;
+  top: 82px;
   display: none;
-  max-width: 260px;
+  max-width: 300px;
+  padding: 5px 11px 6px;
   color: color-mix(in srgb, var(--ds-accent) 82%, var(--ds-text));
   font: italic 13px/1.45 "Kaiti SC", "STKaiti", serif;
   letter-spacing: .03em;
-  text-align: right;
-  transform: rotate(-2deg);
+  text-align: center;
+  border: 1px solid color-mix(in srgb, var(--ds-accent) 18%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ds-panel) 68%, transparent);
+  box-shadow: 0 5px 16px color-mix(in srgb, var(--ds-text) 6%, transparent);
+  transform: translateX(-50%) rotate(-1deg);
 }
 
 .dream-skin-footer-quote {
@@ -240,8 +247,8 @@ html.codex-dream-skin main.main-surface > header.app-header-tint {
   background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--ds-panel) 65%, transparent));
 }
 
-#codex-dream-skin-chrome.dream-skin-home-shell .dream-skin-quote,
-#codex-dream-skin-chrome.dream-skin-home-shell .dream-skin-footer-quote { display: block; }
+#codex-dream-skin-chrome.dream-skin-home-shell .dream-skin-quote { display: block; }
+#codex-dream-skin-chrome.dream-skin-home-shell .dream-skin-footer-quote { display: none; }
 
 .dream-skin-particles {
   position: absolute;
@@ -332,7 +339,7 @@ html.codex-dream-skin .dream-skin-home {
   min-height: 270px !important;
   flex: 0 1 auto !important;
   padding: 0 !important;
-  overflow: hidden !important;
+  overflow: visible !important;
   border: 1px solid color-mix(in srgb, var(--ds-accent) 46%, transparent) !important;
   border-radius: 26px !important;
   background-color: var(--ds-panel-2) !important;
@@ -364,25 +371,17 @@ html.codex-dream-skin .dream-skin-home {
 }
 
 .dream-skin-home > div:first-child > div:first-child > div:first-child::after {
-  content: "";
-  position: absolute;
-  right: 18px;
-  bottom: 12px;
-  z-index: 2;
-  width: 76px;
-  height: 68px;
-  pointer-events: none;
-  opacity: .84;
-  background: var(--dream-skin-sticker) center / contain no-repeat;
-  filter: drop-shadow(0 7px 8px color-mix(in srgb, var(--ds-text) 18%, transparent));
+  content: none;
+  display: none;
 }
 
 .dream-skin-home > div:first-child > div:first-child > div:first-child > div:first-child {
   position: relative;
   z-index: 3;
+  box-sizing: border-box;
   height: 100%;
-  padding-left: 38px;
-  align-items: center !important;
+  padding: 34px 0 0 38px;
+  align-items: flex-start !important;
   justify-content: flex-start !important;
 }
 
@@ -425,6 +424,37 @@ html.codex-dream-skin .dream-skin-home {
   letter-spacing: .03em;
 }
 
+.dream-skin-hero-meta {
+  position: absolute;
+  left: 38px;
+  top: 145px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: min(330px, calc(58% - 38px));
+  pointer-events: none;
+}
+
+.dream-skin-hero-sticker {
+  width: 64px;
+  height: 58px;
+  opacity: .92;
+  background: var(--dream-skin-sticker) left center / contain no-repeat;
+  filter: drop-shadow(0 6px 8px color-mix(in srgb, var(--ds-text) 16%, transparent));
+}
+
+.dream-skin-hero-caption {
+  max-width: 330px;
+  margin-top: 3px;
+  padding-left: 9px;
+  color: var(--ds-muted);
+  font: 500 11.5px/1.45 "Kaiti SC", "STKaiti", "PingFang SC", serif;
+  letter-spacing: .02em;
+  text-align: left;
+  border-left: 2px solid var(--ds-accent);
+}
+
 .dream-skin-home [data-feature="game-source"] button {
   margin: 0 5px;
   padding: 2px 9px 3px;
@@ -450,11 +480,30 @@ html.codex-dream-skin .dream-skin-home {
   right: 14px !important;
   top: 100% !important;
   margin-top: 13px !important;
+  z-index: 6 !important;
 }
 
 .dream-skin-home .group\/home-suggestions { overflow: visible !important; }
 
-.dream-skin-home .group\/home-suggestions button {
+.dream-skin-home .dream-skin-native-suggestions-lane {
+  position: absolute !important;
+  left: 14px !important;
+  right: 14px !important;
+  top: 100% !important;
+  z-index: 6 !important;
+  margin-top: 13px !important;
+  overflow: visible !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.dream-skin-home .dream-skin-native-suggestions {
+  overflow: visible !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.dream-skin-home .dream-skin-home-card {
   position: relative !important;
   min-height: 126px !important;
   padding: 14px 13px 12px !important;
@@ -475,13 +524,14 @@ html.codex-dream-skin .dream-skin-home {
   transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease !important;
 }
 
-.dream-skin-home .group\/home-suggestions button:hover {
+.dream-skin-home .dream-skin-home-card:hover {
   transform: translateY(-3px) !important;
   border-color: color-mix(in srgb, var(--ds-accent) 48%, transparent) !important;
   box-shadow: 0 14px 30px color-mix(in srgb, var(--ds-text) 12%, transparent), 0 0 0 2px color-mix(in srgb, var(--ds-accent) 7%, transparent) !important;
 }
 
-.dream-skin-home .group\/home-suggestions button > span:first-child > span:first-child {
+.dream-skin-home .dream-skin-home-card > span:first-child > span:first-child {
+  position: relative !important;
   width: 38px;
   height: 38px;
   display: grid !important;
@@ -493,14 +543,25 @@ html.codex-dream-skin .dream-skin-home {
   box-shadow: 0 0 0 7px color-mix(in srgb, var(--ds-accent) 8%, transparent), 0 5px 14px color-mix(in srgb, var(--ds-text) 16%, transparent);
 }
 
-.dream-skin-home .group\/home-suggestions button svg {
+.dream-skin-home .dream-skin-home-card svg {
+  position: absolute !important;
+  left: 50% !important;
+  top: 50% !important;
   width: 21px !important;
   height: 21px !important;
+  display: block !important;
+  margin: 0 !important;
   color: #ffffff !important;
+  transform: translate(-50%, -50%) !important;
 }
 
-.dream-skin-home .group\/home-suggestions button > span:first-child { justify-content: center !important; }
-.dream-skin-home .group\/home-suggestions button > span:last-child { align-items: center !important; text-align: center !important; }
+.dream-skin-home .dream-skin-home-card > span:first-child {
+  width: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+.dream-skin-home .dream-skin-home-card > span:last-child { align-items: center !important; text-align: center !important; }
 
 html.codex-dream-skin .composer-surface-chrome {
   border: 1px solid color-mix(in srgb, var(--ds-accent) 28%, transparent) !important;
@@ -619,12 +680,15 @@ html.codex-dream-skin[data-dream-shell="dark"] main.main-surface:not(.dream-skin
   .dream-skin-brand b { font-size: 12px; }
   .dream-skin-home > div:first-child > div:first-child { min-height: 410px !important; flex-basis: 410px !important; }
   .dream-skin-home > div:first-child > div:first-child > div:first-child { height: 230px !important; min-height: 230px !important; background-size: 100% 100%, 100% 100%, auto 122% !important; }
-  .dream-skin-home > div:first-child > div:first-child > div:first-child > div:first-child { padding-left: 25px; }
+  .dream-skin-home > div:first-child > div:first-child > div:first-child > div:first-child { padding: 26px 0 0 25px; }
   .dream-skin-home > div:first-child > div:first-child > div:first-child > div:first-child > div:first-child { width: 67% !important; }
   .dream-skin-home [data-feature="game-source"] { font-size: 18px !important; }
   .dream-skin-home [data-feature="game-source"]::before { margin-bottom: 7px; font-size: 10px; }
   .dream-skin-home [data-feature="game-source"]::after { margin-top: 9px; font-size: 11px; }
-  .dream-skin-home .group\/home-suggestions button { min-height: 114px !important; font-size: 12px !important; }
+  .dream-skin-hero-meta { left: 25px; top: 122px; width: min(270px, calc(67% - 25px)); }
+  .dream-skin-hero-sticker { width: 52px; height: 47px; }
+  .dream-skin-hero-caption { max-width: 270px; font-size: 10.5px; }
+  .dream-skin-home .dream-skin-home-card { min-height: 114px !important; font-size: 12px !important; }
 }
 
 @media (max-width: 720px) {
@@ -634,6 +698,7 @@ html.codex-dream-skin[data-dream-shell="dark"] main.main-surface:not(.dream-skin
   }
   .dream-skin-home > div:first-child > div:first-child > div:first-child::before { width: 100%; }
   .dream-skin-home > div:first-child > div:first-child > div:first-child > div:first-child > div:first-child { width: calc(100% - 28px) !important; }
+  .dream-skin-hero-meta { width: calc(100% - 50px); }
   html.codex-dream-skin main.main-surface:not(.dream-skin-home-shell) { background: var(--ds-bg) !important; }
 }
 

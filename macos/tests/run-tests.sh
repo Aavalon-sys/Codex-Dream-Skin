@@ -59,6 +59,27 @@ if /usr/bin/grep -n -E '#(E25563|F07A86|F3A8AF|C93D4C|7CFF46|36D7E8|642A8C)' \
 fi
 /usr/bin/grep -F -q 'pointer-events: none' "$ROOT/assets/dream-skin.css"
 /usr/bin/grep -F -q -- '--dream-skin-pet-safe-height' "$ROOT/assets/dream-skin.css"
+for marker in \
+  'dream-skin-hero-meta' \
+  'dream-skin-hero-sticker' \
+  'dream-skin-hero-caption' \
+  'dream-skin-native-suggestions-lane' \
+  'dream-skin-home-card'; do
+  /usr/bin/grep -F -q "$marker" "$ROOT/assets/dream-skin.css"
+  /usr/bin/grep -F -q "$marker" "$ROOT/assets/renderer-inject.js"
+done
+/usr/bin/grep -F -q 'overflow: visible !important' "$ROOT/assets/dream-skin.css"
+/usr/bin/grep -F -q '#codex-dream-skin-chrome.dream-skin-home-shell .dream-skin-footer-quote { display: none; }' "$ROOT/assets/dream-skin.css"
+/usr/bin/grep -F -q 'top: 82px;' "$ROOT/assets/dream-skin.css"
+/usr/bin/grep -F -q 'transform: translate(-50%, -50%) !important;' "$ROOT/assets/dream-skin.css"
+if /usr/bin/grep -F -q '.group\/home-suggestions button' "$ROOT/assets/dream-skin.css"; then
+  printf 'Home-card styling leaked to secondary suggestion decks.\n' >&2
+  exit 1
+fi
+/usr/bin/grep -F -q 'nativeSuggestionButtons.length === 4' "$ROOT/assets/renderer-inject.js"
+/usr/bin/grep -F -q 'button.hasAttribute("aria-labelledby")' "$ROOT/assets/renderer-inject.js"
+/usr/bin/grep -F -q 'button.classList.contains("flex-col")' "$ROOT/assets/renderer-inject.js"
+/usr/bin/grep -F -q '!button.classList.contains("group/home-suggestion-list-item")' "$ROOT/assets/renderer-inject.js"
 
 TMP="$(/usr/bin/mktemp -d /tmp/codex-dream-skin-tests.XXXXXX)"
 trap '/bin/rm -rf "$TMP"' EXIT
