@@ -44,8 +44,12 @@
 
 ```bash
 npm test
+# 可选：额外验证当前 Mac 上的 Codex 官方签名和运行环境
+npm run test:host
 ./scripts/build-client-release.sh "/path/to/灰泽满-Hazel-Codex-macOS.zip"
 ```
+
+安装包构建只执行与打包账号、用户名和本机 Codex 安装位置无关的可移植检查；目标 Mac 上的官方应用签名会在安装及验证主题时单独检查。
 
 颜色、语录和图片出处见 [references/asset-sources.md](references/asset-sources.md)。角色素材不纳入本项目 MIT 许可，仅用于非商业同人主题展示；二次使用者应自行确认授权范围。
 

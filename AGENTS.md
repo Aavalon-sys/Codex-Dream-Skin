@@ -9,7 +9,8 @@
 
 ## Build, Test, and Development Commands
 
-- `cd macos && npm test`: run shell/JavaScript syntax, payload, configuration round-trip, signature, and doctor checks.
+- `cd macos && npm test`: run host-independent shell/JavaScript syntax, payload, configuration round-trip, and package-safety checks.
+- `cd macos && npm run test:host`: add current-Mac Codex signature and doctor checks when validating a local installation.
 - `macos/scripts/doctor-macos.sh`: validate the installed Codex app, signed bundled Node runtime, theme payload, and optional live session.
 - `macos/scripts/build-release.sh`: test and build the macOS release ZIP plus SHA-256 file.
 - `macos/scripts/build-client-release.sh <output.zip>`: create the customer-facing double-click package.

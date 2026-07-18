@@ -4,7 +4,13 @@ set -euo pipefail
 
 if [ -z "${HOME:-}" ]; then
   CURRENT_USER="$(/usr/bin/id -un)"
-  HOME="$(/usr/bin/dscl . -read "/Users/$CURRENT_USER" NFSHomeDirectory 2>/dev/null | /usr/bin/awk '{print $2}')"
+  HOME="$(/usr/bin/id -P "$CURRENT_USER" 2>/dev/null | /usr/bin/awk -F: 'NR == 1 {print $9}' || true)"
+  if [ -z "$HOME" ]; then
+    HOME="$(/usr/bin/dscl . -read "/Users/$CURRENT_USER" NFSHomeDirectory 2>/dev/null | /usr/bin/awk 'NR == 1 {print $2}' || true)"
+  fi
+  if [ -z "$HOME" ]; then
+    HOME="$(/usr/bin/dscacheutil -q user -a name "$CURRENT_USER" 2>/dev/null | /usr/bin/awk '/^dir: / {print $2; exit}' || true)"
+  fi
   [ -n "$HOME" ] || { printf 'Codex Dream Skin Studio: could not resolve the current macOS home directory.\n' >&2; exit 1; }
   export HOME
 fi
@@ -26,7 +32,7 @@ START_ERROR_LOG="$STATE_ROOT/start-error.log"
 CODEX_APP_JOB_LABEL="com.openai.codex-dream-skin-studio.app"
 INJECTOR_JOB_LABEL="com.openai.codex-dream-skin-studio.injector"
 EXPECTED_CODEX_TEAM_ID="${CODEX_EXPECTED_TEAM_ID:-2DC432GLL2}"
-SKIN_VERSION="1.2.0-hazel.1"
+SKIN_VERSION="1.2.0-hazel.2"
 
 fail() {
   local message="$*"
@@ -49,7 +55,11 @@ discover_codex_app() {
   local executable_name=""
   local configured="${CODEX_APP_BUNDLE:-}"
 
-  for candidate in "$configured" "/Applications/ChatGPT.app" "$HOME/Applications/ChatGPT.app"; do
+  for candidate in \
+    "$configured" \
+    "/Applications/ChatGPT.app" \
+    "/Applications/Utilities/ChatGPT.app" \
+    "$HOME/Applications/ChatGPT.app"; do
     [ -n "$candidate" ] || continue
     [ -f "$candidate/Contents/Info.plist" ] || continue
     identifier="$(/usr/bin/plutil -extract CFBundleIdentifier raw -o - "$candidate/Contents/Info.plist" 2>/dev/null || true)"
@@ -439,6 +449,7 @@ ensure_node_runtime() {
   for candidate in \
     "/Applications/Codex.app/Contents/Resources/cua_node/bin/node" \
     "/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node" \
+    "/Applications/Utilities/ChatGPT.app/Contents/Resources/cua_node/bin/node" \
     "$HOME/Applications/Codex.app/Contents/Resources/cua_node/bin/node"
   do
     if [ -x "$candidate" ]; then

@@ -2,8 +2,31 @@
 
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
-NODE="${NODE:-/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node}"
-[ -x "$NODE" ] || { printf 'Codex bundled Node.js was not found: %s\n' "$NODE" >&2; exit 1; }
+WITH_HOST_DOCTOR="false"
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --with-host-doctor) WITH_HOST_DOCTOR="true"; shift ;;
+    *) printf 'Unknown test argument: %s\n' "$1" >&2; exit 1 ;;
+  esac
+done
+
+NODE="${NODE:-$(command -v node 2>/dev/null || true)}"
+if [ ! -x "${NODE:-}" ]; then
+  for candidate in \
+    "/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node" \
+    "/Applications/Utilities/ChatGPT.app/Contents/Resources/cua_node/bin/node" \
+    "$HOME/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node"; do
+    if [ -x "$candidate" ]; then NODE="$candidate"; break; fi
+  done
+fi
+if [ ! -x "${NODE:-}" ]; then
+  CODEX_TEST_BUNDLE="$(/usr/bin/mdfind 'kMDItemCFBundleIdentifier == "com.openai.codex"' | /usr/bin/head -n 1)"
+  [ -z "$CODEX_TEST_BUNDLE" ] || NODE="$CODEX_TEST_BUNDLE/Contents/Resources/cua_node/bin/node"
+fi
+[ -x "${NODE:-}" ] || {
+  printf 'Node.js 20+ or an installed Codex bundled Node.js is required for static tests.\n' >&2
+  exit 1
+}
 
 while IFS= read -r file; do /bin/bash -n "$file"; done < <(
   /usr/bin/find "$ROOT" -type f \( -name '*.sh' -o -name '*.command' \) \
@@ -98,9 +121,10 @@ EXPECTED_TEAM_ID="TEAM'ID"
   const [file, codexBundle, codexExe, codexVersion, codexTeamId] = process.argv.slice(1);
   fs.writeFileSync(file, `${JSON.stringify({ codexBundle, codexExe, codexVersion, codexTeamId })}\n`);
 ' "$RUNTIME_STATE" "$EXPECTED_BUNDLE" "$EXPECTED_EXE" "$EXPECTED_VERSION" "$EXPECTED_TEAM_ID"
-/usr/bin/env -u NODE -u NODE_VERSION HOME="$RUNTIME_HOME" /bin/bash -c '
+/usr/bin/env -u CODEX_BUNDLE -u CODEX_EXE -u CODEX_VERSION -u CODEX_TEAM_ID \
+  NODE="$NODE" HOME="$RUNTIME_HOME" /bin/bash -c '
   . "$1/scripts/common-macos.sh"
-  ensure_node_runtime
+  restore_runtime_context_from_state
   [ "$CODEX_BUNDLE" = "$2" ]
   [ "$CODEX_EXE" = "$3" ]
   [ "$CODEX_VERSION" = "$4" ]
@@ -176,7 +200,10 @@ NO_DESKTOP_BACKUP="$TMP/theme-backup-without-desktop.json"
 "$NODE" "$ROOT/scripts/theme-config.mjs" restore "$NO_DESKTOP_CONFIG" "$NO_DESKTOP_BACKUP" >/dev/null
 /usr/bin/cmp -s "$NO_DESKTOP_CONFIG" "$TMP/original-without-desktop.toml"
 
-/usr/bin/env -u HOME /bin/bash -c '. "$1/scripts/common-macos.sh"; [ -n "$HOME" ] && [ "$SKIN_VERSION" = "1.2.0-hazel.1" ]' _ "$ROOT"
-"$ROOT/scripts/doctor-macos.sh" >/dev/null
-
-printf 'PASS: syntax, payload, runtime-state safety, custom-theme, config round-trips, HOME recovery, signature, and doctor checks.\n'
+/usr/bin/env -u HOME /bin/bash -c '. "$1/scripts/common-macos.sh"; [ -n "$HOME" ] && [ "$SKIN_VERSION" = "1.2.0-hazel.2" ]' _ "$ROOT"
+if [ "$WITH_HOST_DOCTOR" = "true" ]; then
+  "$ROOT/scripts/doctor-macos.sh" >/dev/null
+  printf 'PASS: portable checks plus host Codex signature and doctor checks.\n'
+else
+  printf 'PASS: portable syntax, payload, runtime-state safety, custom-theme, config round-trips, and HOME recovery checks.\n'
+fi

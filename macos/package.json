@@ -1,10 +1,11 @@
 {
   "name": "codex-dream-skin-studio",
-  "version": "1.2.0-hazel.1",
+  "version": "1.2.0-hazel.2",
   "private": true,
   "type": "module",
   "scripts": {
     "test": "./tests/run-tests.sh",
+    "test:host": "./tests/run-tests.sh --with-host-doctor",
     "doctor": "./scripts/doctor-macos.sh"
   },
   "engines": {

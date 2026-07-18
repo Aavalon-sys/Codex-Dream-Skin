@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.0-hazel.2 — 2026-07-17
+
+- Keep the four native home action cards visible, centered, and independently styled.
+- Preserve text in secondary suggestion lists by excluding list items from home-card styling.
+- Move the Hazel-and-jelly sticker and character-setting caption into the left side of the hero.
+- Reposition the corner quote away from the character art and vertically center the online status in the title bar.
+- Discover valid Codex installations stored in `/Applications/Utilities` during verification and hot reapply.
+- Separate portable release checks from the optional host doctor, and reject archives containing builder-specific paths.
+- Treat stale or inactive live-theme state as informational unless the doctor is called with `--require-live`.
+- Add regression checks for the updated home-card DOM classification and scoped CSS selectors.
+
 ## 1.2.0-hazel.1 — 2026-07-16
 
 - Add the Hazel-specific light gray and mint visual system with a dark fallback.

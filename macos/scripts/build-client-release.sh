@@ -42,8 +42,17 @@ trap '/bin/rm -rf "$TMP"' EXIT
 /bin/chmod 755 "$ENGINE"/*.command "$ENGINE"/scripts/*.sh "$ENGINE"/tests/*.sh
 /usr/bin/xattr -cr "$CLIENT_ROOT"
 /usr/bin/find "$CLIENT_ROOT" -type f \( -name '.DS_Store' -o -name '._*' \) -delete
+if /usr/bin/grep -R -I -F -q "$HOME" "$CLIENT_ROOT"; then
+  printf 'Refusing to package a client archive containing the builder HOME path.\n' >&2
+  exit 1
+fi
+if /usr/bin/grep -R -I -F -q "$ROOT" "$CLIENT_ROOT"; then
+  printf 'Refusing to package a client archive containing the builder source path.\n' >&2
+  exit 1
+fi
 /bin/mkdir -p "$(dirname "$OUTPUT")"
 /bin/rm -f "$OUTPUT"
 COPYFILE_DISABLE=1 /usr/bin/ditto -c -k --keepParent --norsrc --noextattr "$CLIENT_ROOT" "$OUTPUT"
+/usr/bin/unzip -tq "$OUTPUT" >/dev/null
 SHA256="$(/usr/bin/shasum -a 256 "$OUTPUT" | /usr/bin/awk '{print $1}')"
 /usr/bin/printf 'Created %s\nVersion %s\nSHA-256 %s\n' "$OUTPUT" "$VERSION" "$SHA256"
