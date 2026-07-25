@@ -86,11 +86,19 @@ for marker in \
   'dream-skin-hero-meta' \
   'dream-skin-hero-sticker' \
   'dream-skin-hero-caption' \
+  'dream-skin-home-hero-zone' \
+  'dream-skin-home-hero-stage' \
+  'dream-skin-home-hero-content' \
+  'dream-skin-home-composer-zone' \
   'dream-skin-native-suggestions-lane' \
-  'dream-skin-home-card'; do
+  'dream-skin-home-card' \
+  'dream-skin-home-suggestion-row' \
+  'dream-skin-project-button'; do
   /usr/bin/grep -F -q "$marker" "$ROOT/assets/dream-skin.css"
   /usr/bin/grep -F -q "$marker" "$ROOT/assets/renderer-inject.js"
 done
+/usr/bin/grep -F -q '.dream-skin-home.dream-skin-home-modern' "$ROOT/assets/dream-skin.css"
+/usr/bin/grep -F -q '.dream-skin-home.dream-skin-home-legacy' "$ROOT/assets/dream-skin.css"
 /usr/bin/grep -F -q 'overflow: visible !important' "$ROOT/assets/dream-skin.css"
 /usr/bin/grep -F -q '#codex-dream-skin-chrome.dream-skin-home-shell .dream-skin-footer-quote { display: none; }' "$ROOT/assets/dream-skin.css"
 /usr/bin/grep -F -q 'top: 82px;' "$ROOT/assets/dream-skin.css"
@@ -99,10 +107,31 @@ if /usr/bin/grep -F -q '.group\/home-suggestions button' "$ROOT/assets/dream-ski
   printf 'Home-card styling leaked to secondary suggestion decks.\n' >&2
   exit 1
 fi
+if /usr/bin/grep -F -q '.dream-skin-home > div:first-child' "$ROOT/assets/dream-skin.css"; then
+  printf 'The home theme regressed to brittle positional DOM selectors.\n' >&2
+  exit 1
+fi
 /usr/bin/grep -F -q 'nativeSuggestionButtons.length === 4' "$ROOT/assets/renderer-inject.js"
 /usr/bin/grep -F -q 'button.hasAttribute("aria-labelledby")' "$ROOT/assets/renderer-inject.js"
 /usr/bin/grep -F -q 'button.classList.contains("flex-col")' "$ROOT/assets/renderer-inject.js"
 /usr/bin/grep -F -q '!button.classList.contains("group/home-suggestion-list-item")' "$ROOT/assets/renderer-inject.js"
+/usr/bin/grep -F -q 'button.classList.contains("group/home-suggestion-list-item")' "$ROOT/assets/renderer-inject.js"
+/usr/bin/grep -F -q 'markOnly("dream-skin-home-hero"' "$ROOT/assets/renderer-inject.js"
+/usr/bin/grep -F -q "home?.querySelector('.dream-skin-project-button')" "$ROOT/scripts/injector.mjs"
+"$NODE" -e '
+  const css = require("node:fs").readFileSync(process.argv[1], "utf8");
+  const block = css.match(/\.dream-skin-home\.dream-skin-home-modern \.dream-skin-native-suggestions \{([^}]+)\}/)?.[1] || "";
+  for (const marker of [
+    "height: auto !important",
+    "max-height: none !important",
+    "padding: 0 !important",
+    "border: 0 !important",
+    "background: transparent !important",
+    "box-shadow: none !important",
+  ]) {
+    if (!block.includes(marker)) process.exit(1);
+  }
+' "$ROOT/assets/dream-skin.css"
 
 TMP="$(/usr/bin/mktemp -d /tmp/codex-dream-skin-tests.XXXXXX)"
 trap '/bin/rm -rf "$TMP"' EXIT
@@ -200,7 +229,7 @@ NO_DESKTOP_BACKUP="$TMP/theme-backup-without-desktop.json"
 "$NODE" "$ROOT/scripts/theme-config.mjs" restore "$NO_DESKTOP_CONFIG" "$NO_DESKTOP_BACKUP" >/dev/null
 /usr/bin/cmp -s "$NO_DESKTOP_CONFIG" "$TMP/original-without-desktop.toml"
 
-/usr/bin/env -u HOME /bin/bash -c '. "$1/scripts/common-macos.sh"; [ -n "$HOME" ] && [ "$SKIN_VERSION" = "1.2.0-hazel.2" ]' _ "$ROOT"
+/usr/bin/env -u HOME /bin/bash -c '. "$1/scripts/common-macos.sh"; [ -n "$HOME" ] && [ "$SKIN_VERSION" = "1.3.0-hazel.2" ]' _ "$ROOT"
 if [ "$WITH_HOST_DOCTOR" = "true" ]; then
   "$ROOT/scripts/doctor-macos.sh" >/dev/null
   printf 'PASS: portable checks plus host Codex signature and doctor checks.\n'

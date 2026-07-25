@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..");
-const SKIN_VERSION = "1.2.0-hazel.2";
+const SKIN_VERSION = "1.3.0-hazel.2";
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
 const MAX_ART_BYTES = 16 * 1024 * 1024;
 const MAX_STICKER_BYTES = 4 * 1024 * 1024;
@@ -399,11 +399,19 @@ async function verifySession(session) {
       document.querySelector('.group\\\\/home-suggestions');
     const homeRoute = homeSignal?.closest('[role="main"]') ?? null;
     const home = document.querySelector('[role="main"].dream-skin-home');
-    const suggestions = home?.querySelector('.group\\\\/home-suggestions') ?? null;
-    const cardBoxes = suggestions ? [...suggestions.querySelectorAll('button')].map(box) : [];
+    const suggestions = home?.querySelector('.dream-skin-native-suggestions') ??
+      home?.querySelector('.group\\\\/home-suggestions') ?? null;
+    const markedActions = suggestions
+      ? [...suggestions.querySelectorAll('.dream-skin-home-card, .dream-skin-home-suggestion-row')]
+      : [];
+    const cardBoxes = (markedActions.length ? markedActions :
+      suggestions ? [...suggestions.querySelectorAll('button')] : []).map(box);
     const visibleCards = cardBoxes.filter((item) => item?.visible);
-    const hero = box(home?.firstElementChild?.firstElementChild?.firstElementChild);
-    const projectButton = box(home?.querySelector('.group\\\\/project-selector > button'));
+    const hero = box(home?.querySelector('.dream-skin-home-hero'));
+    const projectButton = box(
+      home?.querySelector('.dream-skin-project-button') ??
+      home?.querySelector('.group\\\\/project-selector > button')
+    );
     const composer = box(document.querySelector('.composer-surface-chrome'));
     const sidebar = box(document.querySelector('aside.app-shell-left-panel'));
     const chrome = document.getElementById('codex-dream-skin-chrome');

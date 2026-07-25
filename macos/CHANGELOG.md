@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.3.0-hazel.2 — 2026-07-25
+
+- Support the refactored Codex 26.721 new-task page while preserving the legacy four-card home layout.
+- Replace brittle positional `:first-child` selectors with semantic runtime markers for the hero, suggestion area, project selector, and composer.
+- Keep the new personalized suggestion rows fully readable, including their native icons and text.
+- Remove the enclosing suggestion panel so changing suggestion counts and long copy flow naturally without a fixed-looking box.
+- Rebalance the hero and composer zones so the character art, quote, sticker, project selector, and input remain visible at desktop and narrow window widths.
+- Update live verification to recognize both the new suggestion-list layout and the previous four-card action deck.
+- Add regression checks for both home structures and reject a return to positional home-page selectors.
+
 ## 1.2.0-hazel.2 — 2026-07-17
 
 - Keep the four native home action cards visible, centered, and independently styled.

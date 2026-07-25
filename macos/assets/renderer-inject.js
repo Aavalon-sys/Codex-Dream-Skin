@@ -191,32 +191,60 @@
     if (home) home.classList.add("dream-skin-home");
 
     const gameSource = home?.querySelector('[data-feature="game-source"]') || null;
-    const heroCandidate = home?.firstElementChild?.firstElementChild?.firstElementChild || null;
-    const heroFrame = heroCandidate && gameSource && heroCandidate.contains(gameSource)
-      ? heroCandidate : null;
+    const composer = home?.querySelector(".composer-surface-chrome") || null;
+    const homeAncestors = [];
+    for (let candidate = gameSource; candidate && candidate !== home; candidate = candidate.parentElement) {
+      homeAncestors.push(candidate);
+    }
+    const homeRoot = homeAncestors.at(-1) || null;
+    const heroZone = homeAncestors.at(-2) || null;
+    const heroFrame = homeAncestors.at(-3) || null;
+    const heroContent = gameSource?.parentElement || null;
+    const heroStage = heroContent?.parentElement || null;
     const nativeSuggestions = home?.querySelector('[class~="group/home-suggestions"]') || null;
-    let suggestionsLane = nativeSuggestions;
-    while (suggestionsLane && heroFrame && suggestionsLane.parentElement !== heroFrame) {
-      if (!suggestionsLane.parentElement || !heroFrame.contains(suggestionsLane.parentElement)) {
-        suggestionsLane = null;
-        break;
+    const modernHome = Boolean(
+      heroFrame &&
+      (
+        (nativeSuggestions && !heroFrame.contains(nativeSuggestions)) ||
+        (!nativeSuggestions && composer && !heroFrame.contains(composer))
+      )
+    );
+    const legacyHome = Boolean(heroFrame && nativeSuggestions && heroFrame.contains(nativeSuggestions));
+    let suggestionsLane = nativeSuggestions?.parentElement || null;
+    if (legacyHome) {
+      suggestionsLane = nativeSuggestions;
+      while (suggestionsLane && suggestionsLane.parentElement !== heroFrame) {
+        if (!suggestionsLane.parentElement || !heroFrame.contains(suggestionsLane.parentElement)) {
+          suggestionsLane = null;
+          break;
+        }
+        suggestionsLane = suggestionsLane.parentElement;
       }
-      suggestionsLane = suggestionsLane.parentElement;
+      if (suggestionsLane?.parentElement !== heroFrame) suggestionsLane = null;
     }
-    if (suggestionsLane?.parentElement !== heroFrame) suggestionsLane = null;
+    let composerZone = composer;
+    while (composerZone && homeRoot && composerZone.parentElement !== homeRoot) {
+      composerZone = composerZone.parentElement;
+    }
+    if (composerZone?.parentElement !== homeRoot) composerZone = null;
 
-    for (const candidate of document.querySelectorAll(".dream-skin-home-hero")) {
-      if (candidate !== heroFrame) candidate.classList.remove("dream-skin-home-hero");
-    }
-    for (const candidate of document.querySelectorAll(".dream-skin-native-suggestions")) {
-      if (candidate !== nativeSuggestions) candidate.classList.remove("dream-skin-native-suggestions");
-    }
-    for (const candidate of document.querySelectorAll(".dream-skin-native-suggestions-lane")) {
-      if (candidate !== suggestionsLane) candidate.classList.remove("dream-skin-native-suggestions-lane");
-    }
-    heroFrame?.classList.add("dream-skin-home-hero");
-    nativeSuggestions?.classList.add("dream-skin-native-suggestions");
-    suggestionsLane?.classList.add("dream-skin-native-suggestions-lane");
+    const markOnly = (className, target) => {
+      for (const candidate of document.querySelectorAll(`.${className}`)) {
+        if (candidate !== target) candidate.classList.remove(className);
+      }
+      target?.classList.add(className);
+    };
+    home?.classList.toggle("dream-skin-home-modern", modernHome);
+    home?.classList.toggle("dream-skin-home-legacy", legacyHome);
+    markOnly("dream-skin-home-root", homeRoot);
+    markOnly("dream-skin-home-hero-zone", heroZone);
+    markOnly("dream-skin-home-hero-stage", heroStage);
+    markOnly("dream-skin-home-hero-content", heroContent);
+    markOnly("dream-skin-home-composer-zone", composerZone);
+
+    markOnly("dream-skin-home-hero", heroFrame);
+    markOnly("dream-skin-native-suggestions", nativeSuggestions);
+    markOnly("dream-skin-native-suggestions-lane", suggestionsLane);
 
     const nativeSuggestionButtons = nativeSuggestions
       ? [...nativeSuggestions.querySelectorAll("button")]
@@ -239,6 +267,22 @@
     if (isHomeActionDeck) {
       for (const button of nativeSuggestionButtons) button.classList.add("dream-skin-home-card");
     }
+    const suggestionRows = nativeSuggestionButtons.filter((button) =>
+      button.classList.contains("group/home-suggestion-list-item")
+    );
+    for (const candidate of document.querySelectorAll(".dream-skin-home-suggestion-row")) {
+      if (!suggestionRows.includes(candidate)) candidate.classList.remove("dream-skin-home-suggestion-row");
+    }
+    for (const button of suggestionRows) button.classList.add("dream-skin-home-suggestion-row");
+
+    const projectButton = home
+      ? [...home.querySelectorAll("button")].find((button) => {
+          if (button.closest('[class~="group/project-selector"]')) return true;
+          const label = (button.getAttribute("aria-label") || button.textContent || "").trim();
+          return /^(选择项目|Select project)$/i.test(label);
+        }) || null
+      : null;
+    markOnly("dream-skin-project-button", projectButton);
 
     const quotes = Array.isArray(THEME.cornerQuotes) && THEME.cornerQuotes.length
       ? THEME.cornerQuotes : [THEME.quote || "MAKE SOMETHING WONDERFUL"];
@@ -305,11 +349,20 @@
     document.documentElement?.style.removeProperty("--dream-skin-sticker");
     for (const name of THEME_VARIABLES) document.documentElement?.style.removeProperty(name);
     document.querySelectorAll(".dream-skin-home").forEach((node) => node.classList.remove("dream-skin-home"));
+    document.querySelectorAll(".dream-skin-home-modern").forEach((node) => node.classList.remove("dream-skin-home-modern"));
+    document.querySelectorAll(".dream-skin-home-legacy").forEach((node) => node.classList.remove("dream-skin-home-legacy"));
+    document.querySelectorAll(".dream-skin-home-root").forEach((node) => node.classList.remove("dream-skin-home-root"));
+    document.querySelectorAll(".dream-skin-home-hero-zone").forEach((node) => node.classList.remove("dream-skin-home-hero-zone"));
     document.querySelectorAll(".dream-skin-home-shell").forEach((node) => node.classList.remove("dream-skin-home-shell"));
     document.querySelectorAll(".dream-skin-home-hero").forEach((node) => node.classList.remove("dream-skin-home-hero"));
+    document.querySelectorAll(".dream-skin-home-hero-stage").forEach((node) => node.classList.remove("dream-skin-home-hero-stage"));
+    document.querySelectorAll(".dream-skin-home-hero-content").forEach((node) => node.classList.remove("dream-skin-home-hero-content"));
+    document.querySelectorAll(".dream-skin-home-composer-zone").forEach((node) => node.classList.remove("dream-skin-home-composer-zone"));
     document.querySelectorAll(".dream-skin-native-suggestions").forEach((node) => node.classList.remove("dream-skin-native-suggestions"));
     document.querySelectorAll(".dream-skin-native-suggestions-lane").forEach((node) => node.classList.remove("dream-skin-native-suggestions-lane"));
     document.querySelectorAll(".dream-skin-home-card").forEach((node) => node.classList.remove("dream-skin-home-card"));
+    document.querySelectorAll(".dream-skin-home-suggestion-row").forEach((node) => node.classList.remove("dream-skin-home-suggestion-row"));
+    document.querySelectorAll(".dream-skin-project-button").forEach((node) => node.classList.remove("dream-skin-project-button"));
     document.querySelectorAll(".dream-skin-hero-meta").forEach((node) => node.remove());
     document.getElementById(STYLE_ID)?.remove();
     document.getElementById(CHROME_ID)?.remove();
