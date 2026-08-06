@@ -9,7 +9,8 @@
 - Round the content surface's bottom-left corner to match its top-left, restoring the rounded rectangle facing the sidebar.
 - Keep the brand block clear of the macOS traffic lights and the app's own top-left controls when the sidebar is collapsed.
 - Track the sidebar's collapse animation from a single CSS variable, with the corner fills moved by transform and the overlay geometry derived in CSS, bringing dropped frames back down to the unskinned baseline.
-- Let the scheduled-tasks search header show the artwork behind it instead of covering it with an opaque surface and fade strip.
+- Let the scheduled-tasks search header show the artwork behind it instead of covering it with an opaque surface and fade strip. Scope that rule to the header's own surface class so it stops tinting the chat composer's square wrapper, whose corners showed as a box around the rounded input.
+- Hold the chat surface fully opaque until the artwork begins. Fading `--ds-bg` over a `--ds-bg` base changes nothing visually, but the near-1 alphas still rounded to a unit per band, banding the empty half into faint vertical stripes.
 
 ## 1.3.0-hazel.2 — 2026-07-25
 

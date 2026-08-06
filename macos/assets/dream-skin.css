@@ -151,9 +151,12 @@ html.codex-dream-skin main.dream-skin-shell-main {
 
 html.codex-dream-skin main.dream-skin-shell-main:not(.dream-skin-home-shell) {
   background:
+    /* Opaque until the artwork actually starts. Fading --ds-bg over a --ds-bg
+       base is a no-op visually, but the near-1 alphas still round to ±1 per
+       band, which shows up as flat vertical stripes across the empty half. */
     linear-gradient(90deg,
-      color-mix(in srgb, var(--ds-bg) 97%, transparent) 0%,
-      color-mix(in srgb, var(--ds-bg) 92%, transparent) 55%,
+      var(--ds-bg) 0%,
+      var(--ds-bg) 40%,
       color-mix(in srgb, var(--ds-bg) 72%, transparent) 100%),
     var(--dream-skin-art) calc(100% - 28px) 36% / auto 82% no-repeat,
     var(--ds-bg) !important;
@@ -177,15 +180,18 @@ html.codex-dream-skin main.dream-skin-shell-main:not(.dream-skin-home-shell) art
    surface plus a 32px fade strip below it, together blanking out a band of the
    artwork. Drop both and leave just the search pill, on the skin's usual glass
    so the field stays legible over whatever scrolls beneath it. */
-html.codex-dream-skin main.dream-skin-shell-main div.sticky:has(input) {
+html.codex-dream-skin main.dream-skin-shell-main
+  div.sticky[class~="bg-token-main-surface-primary"]:has(input) {
   background: transparent !important;
 }
 
-html.codex-dream-skin main.dream-skin-shell-main div.sticky:has(input)::after {
+html.codex-dream-skin main.dream-skin-shell-main
+  div.sticky[class~="bg-token-main-surface-primary"]:has(input)::after {
   background: none !important;
 }
 
-html.codex-dream-skin main.dream-skin-shell-main div.sticky:has(input) div:has(> input) {
+html.codex-dream-skin main.dream-skin-shell-main
+  div.sticky[class~="bg-token-main-surface-primary"]:has(input) div:has(> input) {
   background: color-mix(in srgb, var(--ds-panel) 80%, transparent) !important;
   border-color: var(--ds-line) !important;
   backdrop-filter: blur(16px) saturate(112%) !important;
@@ -814,8 +820,8 @@ html.codex-dream-skin[data-dream-shell="dark"] .dream-skin-home .dream-skin-home
 html.codex-dream-skin[data-dream-shell="dark"] main.dream-skin-shell-main:not(.dream-skin-home-shell) {
   background:
     linear-gradient(90deg,
-      color-mix(in srgb, var(--ds-bg) 99%, transparent) 0%,
-      color-mix(in srgb, var(--ds-bg) 94%, transparent) 60%,
+      var(--ds-bg) 0%,
+      var(--ds-bg) 40%,
       color-mix(in srgb, var(--ds-bg) 78%, transparent) 100%),
     var(--dream-skin-art) calc(100% - 28px) 36% / auto 82% no-repeat,
     var(--ds-bg) !important;
