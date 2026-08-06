@@ -51,6 +51,46 @@ html.codex-dream-skin aside.app-shell-left-panel {
   backdrop-filter: blur(18px) saturate(108%) !important;
 }
 
+/* The sidebar's rounded right corners and the content surface's rounded left
+   corners cut four notches where the page backdrop shows through — including
+   the decorative highlight centred at 16% 8%, which reads pink against the
+   surrounding tone. Paint those notches flat --ds-bg, on a layer above both
+   panels so their shadows cannot tint it: the result is exactly --ds-bg in
+   light and dark alike, with no per-mode compensation. Each layer is a 20px
+   tile carrying the inverse of one rounded corner. Width comes from the
+   renderer and is 0 while the sidebar is collapsed. */
+html.codex-dream-skin div:has(> aside.app-shell-left-panel)::before,
+html.codex-dream-skin div:has(> aside.app-shell-left-panel)::after {
+  content: "";
+  position: absolute;
+  left: -20px;
+  width: 40px;
+  height: 20px;
+  /* Moved with a transform so tracking the animating sidebar stays on the
+     compositor instead of repainting these tiles every frame. */
+  transform: translateX(var(--dream-skin-sidebar-seam, 0px));
+  will-change: transform;
+  z-index: 3;
+  pointer-events: none;
+  background-size: 20px 20px;
+  background-repeat: no-repeat;
+  background-position: left top, right top;
+}
+
+html.codex-dream-skin div:has(> aside.app-shell-left-panel)::before {
+  top: 0;
+  background-image:
+    radial-gradient(circle 20px at 0 100%, transparent 20px, var(--ds-bg) 20px),
+    radial-gradient(circle 20px at 100% 100%, transparent 20px, var(--ds-bg) 20px);
+}
+
+html.codex-dream-skin div:has(> aside.app-shell-left-panel)::after {
+  bottom: 0;
+  background-image:
+    radial-gradient(circle 20px at 0 0, transparent 20px, var(--ds-bg) 20px),
+    radial-gradient(circle 20px at 100% 0, transparent 20px, var(--ds-bg) 20px);
+}
+
 html.codex-dream-skin aside.app-shell-left-panel nav { background: transparent !important; }
 
 html.codex-dream-skin aside.app-shell-left-panel button,
@@ -96,7 +136,7 @@ html.codex-dream-skin aside.app-shell-left-panel [aria-current="page"] {
   box-shadow: inset 3px 0 var(--ds-accent) !important;
 }
 
-html.codex-dream-skin main.main-surface {
+html.codex-dream-skin main.dream-skin-shell-main {
   color: var(--ds-text) !important;
   background:
     radial-gradient(circle at 88% 7%, color-mix(in srgb, var(--ds-accent-alt) 12%, transparent), transparent 28%),
@@ -104,12 +144,12 @@ html.codex-dream-skin main.main-surface {
   border: 1px solid var(--ds-line) !important;
   border-right: 0 !important;
   border-bottom: 0 !important;
-  border-radius: 20px 0 0 0 !important;
+  border-radius: 20px 0 0 20px !important;
   box-shadow: inset 0 1px color-mix(in srgb, white 70%, transparent), -9px 0 28px color-mix(in srgb, var(--ds-text) 7%, transparent) !important;
   overflow: hidden !important;
 }
 
-html.codex-dream-skin main.main-surface:not(.dream-skin-home-shell) {
+html.codex-dream-skin main.dream-skin-shell-main:not(.dream-skin-home-shell) {
   background:
     linear-gradient(90deg,
       color-mix(in srgb, var(--ds-bg) 97%, transparent) 0%,
@@ -119,13 +159,13 @@ html.codex-dream-skin main.main-surface:not(.dream-skin-home-shell) {
     var(--ds-bg) !important;
 }
 
-html.codex-dream-skin main.main-surface:not(.dream-skin-home-shell) [role="main"] {
+html.codex-dream-skin main.dream-skin-shell-main:not(.dream-skin-home-shell) [role="main"] {
   color: var(--ds-text) !important;
   background: linear-gradient(90deg, color-mix(in srgb, var(--ds-panel) 38%, transparent), transparent) !important;
   text-shadow: none !important;
 }
 
-html.codex-dream-skin main.main-surface:not(.dream-skin-home-shell) article {
+html.codex-dream-skin main.dream-skin-shell-main:not(.dream-skin-home-shell) article {
   color: var(--ds-text) !important;
   border: 1px solid color-mix(in srgb, var(--ds-accent) 12%, transparent);
   background: color-mix(in srgb, var(--ds-panel) 87%, transparent);
@@ -133,15 +173,40 @@ html.codex-dream-skin main.main-surface:not(.dream-skin-home-shell) article {
   backdrop-filter: blur(12px) saturate(106%);
 }
 
-html.codex-dream-skin main.main-surface > header.app-header-tint {
+/* The scheduled-tasks list has a sticky search header that paints an opaque
+   surface plus a 32px fade strip below it, together blanking out a band of the
+   artwork. Drop both and leave just the search pill, on the skin's usual glass
+   so the field stays legible over whatever scrolls beneath it. */
+html.codex-dream-skin main.dream-skin-shell-main div.sticky:has(input) {
+  background: transparent !important;
+}
+
+html.codex-dream-skin main.dream-skin-shell-main div.sticky:has(input)::after {
+  background: none !important;
+}
+
+html.codex-dream-skin main.dream-skin-shell-main div.sticky:has(input) div:has(> input) {
+  background: color-mix(in srgb, var(--ds-panel) 80%, transparent) !important;
+  border-color: var(--ds-line) !important;
+  backdrop-filter: blur(16px) saturate(112%) !important;
+}
+
+html.codex-dream-skin main.dream-skin-shell-main > header.app-header-tint {
   color: var(--ds-text) !important;
   background: color-mix(in srgb, var(--ds-panel) 92%, transparent) !important;
   border-bottom: 1px solid var(--ds-line) !important;
   backdrop-filter: blur(16px) saturate(108%) !important;
 }
 
+/* Geometry comes straight from the sidebar-width variable rather than from
+   per-frame JS writes, so collapsing the sidebar costs one custom-property
+   update per frame instead of a layout read plus four style writes. */
 #codex-dream-skin-chrome {
   position: fixed;
+  left: var(--dream-skin-sidebar-seam, 0px);
+  top: 0;
+  width: calc(100% - var(--dream-skin-sidebar-seam, 0px));
+  height: 100%;
   z-index: 31;
   pointer-events: none;
   overflow: hidden;
@@ -150,7 +215,7 @@ html.codex-dream-skin main.main-surface > header.app-header-tint {
 
 .dream-skin-brand {
   position: absolute;
-  left: 23px;
+  left: max(23px, calc(240px - var(--dream-skin-sidebar-seam, 0px)));
   top: 3px;
   height: 40px;
   display: none;
@@ -746,7 +811,7 @@ html.codex-dream-skin[data-dream-shell="dark"] .dream-skin-home .dream-skin-home
     repeating-linear-gradient(135deg, transparent 0 14px, color-mix(in srgb, var(--ds-secondary) 8%, transparent) 14px 15px);
 }
 
-html.codex-dream-skin[data-dream-shell="dark"] main.main-surface:not(.dream-skin-home-shell) {
+html.codex-dream-skin[data-dream-shell="dark"] main.dream-skin-shell-main:not(.dream-skin-home-shell) {
   background:
     linear-gradient(90deg,
       color-mix(in srgb, var(--ds-bg) 99%, transparent) 0%,
@@ -795,7 +860,7 @@ html.codex-dream-skin[data-dream-shell="dark"] main.main-surface:not(.dream-skin
   .dream-skin-home .dream-skin-home-hero-content { width: calc(100% - 28px) !important; }
   .dream-skin-hero-meta { width: calc(100% - 50px); }
   .dream-skin-home.dream-skin-home-modern .dream-skin-home-suggestion-row { font-size: 11px !important; }
-  html.codex-dream-skin main.main-surface:not(.dream-skin-home-shell) { background: var(--ds-bg) !important; }
+  html.codex-dream-skin main.dream-skin-shell-main:not(.dream-skin-home-shell) { background: var(--ds-bg) !important; }
 }
 
 @media (prefers-reduced-motion: reduce) {

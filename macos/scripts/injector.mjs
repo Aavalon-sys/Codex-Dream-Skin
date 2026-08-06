@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..");
-const SKIN_VERSION = "1.3.0-hazel.2";
+const SKIN_VERSION = "1.4.0-hazel.1";
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
 const MAX_ART_BYTES = 16 * 1024 * 1024;
 const MAX_STICKER_BYTES = 4 * 1024 * 1024;
@@ -156,7 +156,7 @@ async function listAppTargets(port) {
 async function probeSession(session) {
   return session.evaluate(`(() => {
     const markers = {
-      shell: Boolean(document.querySelector('main.main-surface')),
+      shell: Boolean(document.querySelector('main.main-surface, main.bg-token-main-surface-primary')),
       sidebar: Boolean(document.querySelector('aside.app-shell-left-panel')),
       composer: Boolean(document.querySelector('.composer-surface-chrome')),
       main: Boolean(document.querySelector('[role="main"]')),
@@ -165,7 +165,10 @@ async function probeSession(session) {
       title: document.title,
       href: location.href,
       markers,
-      codex: markers.shell && markers.sidebar && (markers.composer || markers.main),
+      // Identify the app by its shell only. The composer and [role="main"] are
+      // per-route: list pages such as 已安排的任务 have neither, and requiring
+      // them made every re-injection fail while such a page was open.
+      codex: markers.shell && markers.sidebar,
     };
   })()`);
 }

@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.4.0-hazel.1 — 2026-08-05
+
+- Restore the skin on Codex 26.727, which dropped the `main-surface` class from `<main>`: the renderer detection no longer requires it, and the stylesheet anchors to a `dream-skin-shell-main` marker applied to whichever content surface is resolved.
+- Identify the Codex renderer by its app shell alone. Requiring a composer or `[role="main"]` on top of that made every re-injection fail while a route lacking both was open, such as the scheduled-tasks list.
+- Resolve the content surface inner-first, so the chrome overlay tracks the content column instead of the full-window wrapper that Codex 26.727 introduced.
+- Fill the panels' rounded-corner notches with a flat base tone painted above both panels, so the exposed slivers no longer show the decorative page tint at full strength.
+- Round the content surface's bottom-left corner to match its top-left, restoring the rounded rectangle facing the sidebar.
+- Keep the brand block clear of the macOS traffic lights and the app's own top-left controls when the sidebar is collapsed.
+- Track the sidebar's collapse animation from a single CSS variable, with the corner fills moved by transform and the overlay geometry derived in CSS, bringing dropped frames back down to the unskinned baseline.
+- Let the scheduled-tasks search header show the artwork behind it instead of covering it with an opaque surface and fade strip.
+
 ## 1.3.0-hazel.2 — 2026-07-25
 
 - Support the refactored Codex 26.721 new-task page while preserving the legacy four-card home layout.

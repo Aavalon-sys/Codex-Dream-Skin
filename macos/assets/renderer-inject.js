@@ -12,13 +12,16 @@
     "--dream-skin-name", "--dream-skin-tagline", "--dream-skin-project-prefix",
     "--dream-skin-project-label", "--dream-skin-hero-title", "--dream-skin-hero-subtitle",
     "--dream-skin-image-position", "--dream-skin-pet-safe-height", "--dream-skin-sticker",
+    "--dream-skin-sidebar-seam",
   ];
   window[DISABLED_KEY] = false;
 
   const previous = window[STATE_KEY];
   if (previous?.observer) previous.observer.disconnect();
+  if (previous?.layoutObserver) previous.layoutObserver.disconnect();
   if (previous?.timer) clearInterval(previous.timer);
   if (previous?.scheduler?.timeout) clearTimeout(previous.scheduler.timeout);
+  if (previous?.sync?.handle) cancelAnimationFrame(previous.sync.handle);
   if (previous?.resizeHandler) window.removeEventListener("resize", previous.resizeHandler);
   if (previous?.mediaHandler && previous?.mediaQuery) {
     try { previous.mediaQuery.removeEventListener("change", previous.mediaHandler); } catch {}
@@ -157,6 +160,34 @@
     existingStyle.dataset.dreamSkinVersion = VERSION;
   }
 
+  let observedShell = null;
+  let lastSeam = -1;
+
+  // The one thing that has to follow the sidebar frame by frame. Everything
+  // positioned off it — the chrome overlay, the brand inset, the corner fills —
+  // derives from this variable in CSS, so a frame costs a single rect read and
+  // (only when it actually moved) one custom-property write.
+  const syncLayout = () => {
+    const root = document.documentElement;
+    if (!root) return;
+    const sidebar = document.querySelector("aside.app-shell-left-panel");
+    const width = sidebar ? Math.round(sidebar.getBoundingClientRect().width) : 0;
+    if (width === lastSeam) return;
+    lastSeam = width;
+    root.style.setProperty("--dream-skin-sidebar-seam", `${width}px`);
+  };
+
+  const sync = { handle: null, frames: 0 };
+  const runSync = () => {
+    sync.handle = null;
+    syncLayout();
+    if (--sync.frames > 0) sync.handle = requestAnimationFrame(runSync);
+  };
+  const trackLayout = (frames = 45) => {
+    sync.frames = Math.max(sync.frames, frames);
+    if (!sync.handle) sync.handle = requestAnimationFrame(runSync);
+  };
+
   const ensure = () => {
     if (window[DISABLED_KEY]) return;
     const root = document.documentElement;
@@ -179,7 +210,27 @@
       style.dataset.dreamSkinVersion = VERSION;
     }
 
-    const shellMain = document.querySelector("main.main-surface") || document.querySelector("main");
+    // Resolve the content surface (the area right of the sidebar). Codex 26.727+
+    // dropped `main-surface` and renders it as a CSS-module class instead; the
+    // outer <main> wraps the whole window, so picking it misplaces the overlay.
+    const shellMain =
+      document.querySelector("main.main-surface") ||
+      document.querySelector('main[class*="MainContentSurface"]') ||
+      [...document.querySelectorAll("main")].find((candidate) => !candidate.querySelector("main")) ||
+      document.querySelector("main");
+    // Tag whichever <main> we resolved so the stylesheet can anchor to a stable
+    // name across versions.
+    for (const stale of document.querySelectorAll("main.dream-skin-shell-main")) {
+      if (stale !== shellMain) stale.classList.remove("dream-skin-shell-main");
+    }
+    shellMain?.classList.add("dream-skin-shell-main");
+    if (layoutObserver && shellMain && observedShell !== shellMain) {
+      layoutObserver.disconnect();
+      layoutObserver.observe(shellMain);
+      const sidebar = document.querySelector("aside.app-shell-left-panel");
+      if (sidebar) layoutObserver.observe(sidebar);
+      observedShell = shellMain;
+    }
     const homeIndicator = document.querySelector('[data-testid="home-icon"]');
     const home = homeIndicator?.closest('[role="main"]') ||
       [...document.querySelectorAll('[role="main"]')].find((candidate) =>
@@ -327,16 +378,15 @@
         <div class="dream-skin-jelly-bubbles"><i></i><i></i><i></i></div>`;
       document.body.appendChild(chrome);
     }
+    // Earlier builds positioned the overlay with inline styles; the stylesheet
+    // drives it now, so drop any left over from a previous injection.
+    for (const prop of ["left", "top", "width", "height"]) chrome.style.removeProperty(prop);
     chrome.querySelector(".dream-skin-brand b").textContent = THEME.name || "Codex Dream Skin";
     chrome.querySelector(".dream-skin-brand small").textContent = THEME.brandSubtitle || "CODEX DREAM SKIN";
     chrome.querySelector(".dream-skin-status span").textContent = THEME.statusText || "DREAM SKIN ONLINE";
     chrome.querySelector(".dream-skin-quote").textContent = quotes[0] || "";
     chrome.querySelector(".dream-skin-footer-quote").textContent = quotes[1] || "";
-    const shellBox = shellMain.getBoundingClientRect();
-    chrome.style.left = `${Math.round(shellBox.left)}px`;
-    chrome.style.top = `${Math.round(shellBox.top)}px`;
-    chrome.style.width = `${Math.round(shellBox.width)}px`;
-    chrome.style.height = `${Math.round(shellBox.height)}px`;
+    syncLayout();
     chrome.classList.toggle("dream-skin-home-shell", Boolean(home));
     chrome.dataset.dreamShell = shell;
   };
@@ -348,6 +398,7 @@
     document.documentElement?.style.removeProperty("--dream-skin-art");
     document.documentElement?.style.removeProperty("--dream-skin-sticker");
     for (const name of THEME_VARIABLES) document.documentElement?.style.removeProperty(name);
+    document.querySelectorAll(".dream-skin-shell-main").forEach((node) => node.classList.remove("dream-skin-shell-main"));
     document.querySelectorAll(".dream-skin-home").forEach((node) => node.classList.remove("dream-skin-home"));
     document.querySelectorAll(".dream-skin-home-modern").forEach((node) => node.classList.remove("dream-skin-home-modern"));
     document.querySelectorAll(".dream-skin-home-legacy").forEach((node) => node.classList.remove("dream-skin-home-legacy"));
@@ -368,8 +419,10 @@
     document.getElementById(CHROME_ID)?.remove();
     const state = window[STATE_KEY];
     state?.observer?.disconnect();
+    state?.layoutObserver?.disconnect();
     if (state?.timer) clearInterval(state.timer);
     if (state?.scheduler?.timeout) clearTimeout(state.scheduler.timeout);
+    if (state?.sync?.handle) cancelAnimationFrame(state.sync.handle);
     if (state?.resizeHandler) window.removeEventListener("resize", state.resizeHandler);
     if (state?.mediaHandler && state?.mediaQuery) {
       try { state.mediaQuery.removeEventListener("change", state.mediaHandler); } catch {}
@@ -396,7 +449,18 @@
     attributeFilter: ["class", "data-theme", "data-appearance", "data-color-mode", "style"],
   });
   const timer = setInterval(ensure, 4000);
-  const resizeHandler = scheduleEnsure;
+  // Collapsing the sidebar animates the content surface: the mutation-driven
+  // ensure() lands mid-flight, and the interval above is throttled while the
+  // window is unfocused, so the overlay would keep a stale offset. Re-run once
+  // the surface has actually settled at its new size.
+  // The observer runs after layout but before paint, so writing the variable
+  // here lands in the same frame as the size change — going through the rAF
+  // loop instead would leave the fills one frame behind at the animation's
+  // first step. trackLayout is the safety net for frames it doesn't report.
+  const layoutObserver = typeof ResizeObserver === "function"
+    ? new ResizeObserver(() => { syncLayout(); trackLayout(); scheduleEnsure(); })
+    : null;
+  const resizeHandler = () => { trackLayout(); scheduleEnsure(); };
   window.addEventListener("resize", resizeHandler, { passive: true });
 
   let mediaQuery = null;
@@ -411,8 +475,10 @@
     ensure,
     cleanup,
     observer,
+    layoutObserver,
     timer,
     scheduler,
+    sync,
     resizeHandler,
     mediaQuery,
     mediaHandler,
