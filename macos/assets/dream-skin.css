@@ -162,6 +162,15 @@ html.codex-dream-skin main.dream-skin-shell-main:not(.dream-skin-home-shell) {
     var(--ds-bg) !important;
 }
 
+/* Fades that ramp to the app's own surface colour still ramp to white in light
+   mode, which lands as a bright block with hard edges over the skin's --ds-bg
+   — most visible just above the composer. Ramp to the skin's tone instead. */
+html.codex-dream-skin main.dream-skin-shell-main
+  [class~="bg-gradient-to-t"][class~="from-token-main-surface-primary"] {
+  background-image:
+    linear-gradient(to top, var(--ds-bg) 0%, var(--ds-bg) 50%, transparent 100%) !important;
+}
+
 html.codex-dream-skin main.dream-skin-shell-main:not(.dream-skin-home-shell) [role="main"] {
   color: var(--ds-text) !important;
   background: linear-gradient(90deg, color-mix(in srgb, var(--ds-panel) 38%, transparent), transparent) !important;

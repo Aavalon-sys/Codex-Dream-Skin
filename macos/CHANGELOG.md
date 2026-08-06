@@ -11,6 +11,7 @@
 - Track the sidebar's collapse animation from a single CSS variable, with the corner fills moved by transform and the overlay geometry derived in CSS, bringing dropped frames back down to the unskinned baseline.
 - Let the scheduled-tasks search header show the artwork behind it instead of covering it with an opaque surface and fade strip. Scope that rule to the header's own surface class so it stops tinting the chat composer's square wrapper, whose corners showed as a box around the rounded input.
 - Hold the chat surface fully opaque until the artwork begins. Fading `--ds-bg` over a `--ds-bg` base changes nothing visually, but the near-1 alphas still rounded to a unit per band, banding the empty half into faint vertical stripes.
+- Re-tint the fades that ramp to the app's own surface colour. They still ramped to white, which in light mode landed as a bright block with hard edges above the composer — 12 levels away from the skin's background, now 1.
 
 ## 1.3.0-hazel.2 — 2026-07-25
 
