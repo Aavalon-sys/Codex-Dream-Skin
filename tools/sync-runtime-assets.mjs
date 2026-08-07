@@ -109,6 +109,13 @@ function compileWindowsImageMetadata(source) {
 }
 
 const sourceCss = await fs.readFile(path.join(projectRoot, "runtime", "dream-skin.css"), "utf8");
+// The Hazel look is an overlay, not a replacement: upstream's stylesheet stays
+// byte-for-byte so its own regressions keep asserting against it, and this
+// layer is appended after it so later merges only ever touch their file.
+const sourceHazelCss = await fs.readFile(
+  path.join(projectRoot, "runtime", "dream-skin-hazel.css"),
+  "utf8",
+);
 const sourceRuntime = await fs.readFile(path.join(projectRoot, "runtime", "renderer-inject.js"), "utf8");
 const sourceThemePackageValidator = await fs.readFile(
   path.join(projectRoot, "runtime", "theme-package-validator.mjs"),
@@ -139,7 +146,8 @@ const outputs = [
     paths: ["macos/assets/selectors.json", "windows/assets/selectors.json"],
   },
   {
-    content: compileSelectorTokens(sourceCss, "runtime/dream-skin.css"),
+    content: `${compileSelectorTokens(sourceCss, "runtime/dream-skin.css")}\n`
+      + compileSelectorTokens(sourceHazelCss, "runtime/dream-skin-hazel.css"),
     paths: ["macos/assets/dream-skin.css", "windows/assets/dream-skin.css"],
   },
   {
