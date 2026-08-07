@@ -672,6 +672,11 @@ export async function loadTheme(themeDir) {
   };
   const rawColors = raw.colors && typeof raw.colors === "object" && !Array.isArray(raw.colors)
     ? raw.colors : null;
+  // Upstream derives the dark palette from the artwork. A theme that ships a
+  // hand-tuned one declares it here; without forwarding it the renderer's
+  // darkColors branch can never fire and a dark shell keeps the light palette.
+  const rawDarkColors = raw.darkColors && typeof raw.darkColors === "object"
+    && !Array.isArray(raw.darkColors) ? raw.darkColors : null;
   const colorKeys = [
     "background", "panel", "panelAlt", "accent", "accentAlt", "secondary",
     "highlight", "text", "muted", "line",
@@ -713,6 +718,51 @@ export async function loadTheme(themeDir) {
       line: normalizeThemeColor(rawColors?.line, "rgba(124, 255, 70, .28)"),
     },
   };
+  if (rawDarkColors) {
+    // Only the keys the theme actually declared are forwarded, so an omitted
+    // key still falls back to the artwork-derived value instead of a default
+    // that would silently override it.
+    const darkKeys = colorKeys.filter((key) => Object.hasOwn(rawDarkColors, key));
+    theme.explicitDarkColorKeys = darkKeys;
+    theme.darkColors = Object.fromEntries(darkKeys.map((key) => [
+      key,
+      normalizeThemeColor(rawDarkColors[key], theme.colors[key]),
+    ]));
+  }
+  // Hero text and the rotating corner quotes are Hazel-contract fields the
+  // renderer already reads; without forwarding they silently fall back to
+  // name/tagline (identical strings for Hazel, so the gap only shows up on a
+  // theme where they differ).
+  if (raw.heroTitle !== undefined) {
+    theme.heroTitle = normalizeThemeText(raw.heroTitle, theme.name, 80, "heroTitle", configPath);
+  }
+  if (raw.heroSubtitle !== undefined) {
+    theme.heroSubtitle = normalizeThemeText(raw.heroSubtitle, theme.tagline, 120, "heroSubtitle", configPath);
+  }
+  if (raw.cornerQuotes !== undefined) {
+    if (!Array.isArray(raw.cornerQuotes) || raw.cornerQuotes.length > 8) {
+      throw new Error(`${configPath} has an invalid cornerQuotes field`);
+    }
+    theme.cornerQuotes = raw.cornerQuotes.map((entry, index) =>
+      normalizeThemeText(entry, "", 200, `cornerQuotes[${index}]`, configPath));
+  }
+  const imagePosition = choice(raw.imagePosition, "imagePosition", ["left", "center", "right"]);
+  if (imagePosition !== undefined) theme.imagePosition = imagePosition;
+  if (raw.petSafeArea !== undefined) {
+    if (!raw.petSafeArea || typeof raw.petSafeArea !== "object" || Array.isArray(raw.petSafeArea)) {
+      throw new Error(`${configPath} has an invalid petSafeArea field`);
+    }
+    const minHeight = raw.petSafeArea.minHeight;
+    if (minHeight !== undefined
+      && (typeof minHeight !== "number" || !Number.isFinite(minHeight) || minHeight < 0 || minHeight > 2000)) {
+      throw new Error(`${configPath} has an invalid petSafeArea.minHeight field`);
+    }
+    const edge = choice(raw.petSafeArea.edge, "petSafeArea.edge", ["top", "bottom", "left", "right"]);
+    theme.petSafeArea = {
+      ...(edge !== undefined ? { edge } : {}),
+      ...(minHeight !== undefined ? { minHeight } : {}),
+    };
+  }
   if (appearance !== undefined) theme.appearance = appearance;
   if (Object.values(art).some((value) => value !== undefined)) {
     theme.art = Object.fromEntries(Object.entries(art).filter(([, value]) => value !== undefined));

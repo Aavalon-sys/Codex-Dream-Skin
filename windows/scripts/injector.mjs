@@ -449,6 +449,8 @@ const THEME_CHOICES = {
   appearance: new Set(["auto", "light", "dark"]),
   safeArea: new Set(["auto", "left", "right", "center", "none"]),
   taskMode: new Set(["auto", "ambient", "banner", "full", "off"]),
+  imagePosition: new Set(["left", "center", "right"]),
+  petSafeEdge: new Set(["top", "bottom", "left", "right"]),
 };
 
 function normalizedUnit(value, name) {
@@ -537,6 +539,11 @@ export async function loadTheme(themeDir) {
   const art = raw.art && typeof raw.art === "object" && !Array.isArray(raw.art) ? raw.art : {};
   const rawColors = raw.colors && typeof raw.colors === "object" && !Array.isArray(raw.colors)
     ? raw.colors : null;
+  // Upstream derives the dark palette from the artwork. A theme that ships a
+  // hand-tuned one declares it here; without forwarding it the renderer's
+  // darkColors branch can never fire and a dark shell keeps the light palette.
+  const rawDarkColors = raw.darkColors && typeof raw.darkColors === "object"
+    && !Array.isArray(raw.darkColors) ? raw.darkColors : null;
   const colorKeys = [
     "background", "panel", "panelAlt", "accent", "accentAlt", "secondary",
     "highlight", "text", "muted", "line",
@@ -574,6 +581,49 @@ export async function loadTheme(themeDir) {
     explicitColorKeys: rawColors ? colorKeys.filter((key) => Object.hasOwn(rawColors, key)) : [],
     colors,
   };
+  if (rawDarkColors) {
+    // Only the keys the theme actually declared are forwarded, so an omitted
+    // key still falls back to the artwork-derived value instead of a default
+    // that would silently override it.
+    const darkKeys = colorKeys.filter((key) => Object.hasOwn(rawDarkColors, key));
+    theme.explicitDarkColorKeys = darkKeys;
+    theme.darkColors = Object.fromEntries(darkKeys.map((key) => [
+      key,
+      normalizeThemeColor(rawDarkColors[key], colors[key]),
+    ]));
+  }
+  // Hero text and the rotating corner quotes are Hazel-contract fields the
+  // renderer already reads; without forwarding they silently fall back to
+  // name/tagline (identical strings for Hazel, so the gap only shows up on a
+  // theme where they differ).
+  if (raw.heroTitle !== undefined) {
+    theme.heroTitle = normalizeThemeText(raw.heroTitle, theme.name, 80, "heroTitle", themePath);
+  }
+  if (raw.heroSubtitle !== undefined) {
+    theme.heroSubtitle = normalizeThemeText(raw.heroSubtitle, theme.tagline, 120, "heroSubtitle", themePath);
+  }
+  if (raw.cornerQuotes !== undefined) {
+    if (!Array.isArray(raw.cornerQuotes) || raw.cornerQuotes.length > 8) {
+      throw new Error(`${themePath} has an invalid cornerQuotes field`);
+    }
+    theme.cornerQuotes = raw.cornerQuotes.map((entry, index) =>
+      normalizeThemeText(entry, "", 200, `cornerQuotes[${index}]`, themePath));
+  }
+  const imagePosition = normalizedChoice(
+    raw.imagePosition, "imagePosition", THEME_CHOICES.imagePosition, undefined,
+  );
+  if (imagePosition !== undefined) theme.imagePosition = imagePosition;
+  if (raw.petSafeArea && typeof raw.petSafeArea === "object" && !Array.isArray(raw.petSafeArea)) {
+    const minHeight = raw.petSafeArea.minHeight;
+    const edge = normalizedChoice(
+      raw.petSafeArea.edge, "petSafeArea.edge", THEME_CHOICES.petSafeEdge, undefined,
+    );
+    theme.petSafeArea = {
+      ...(edge !== undefined ? { edge } : {}),
+      ...(typeof minHeight === "number" && Number.isFinite(minHeight)
+        && minHeight >= 0 && minHeight <= 2000 ? { minHeight } : {}),
+    };
+  }
   const [themeStat, imageStat, safeCss] = await Promise.all([
     fs.stat(themePath),
     fs.stat(realImagePath),

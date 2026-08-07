@@ -233,15 +233,22 @@
     // from the artwork instead, so without this a hand-tuned dark palette would
     // silently fall back to the light one.
     const darkColors = THEME.darkColors && typeof THEME.darkColors === "object" ? THEME.darkColors : null;
-    const declaredColors = shell === "dark" && darkColors
+    const usingDark = shell === "dark" && darkColors;
+    const declaredColors = usingDark
       ? darkColors
       : (THEME.colors && typeof THEME.colors === "object" ? THEME.colors : {});
     const legacyPalette = THEME.palette && typeof THEME.palette === "object" ? THEME.palette : {};
     // macOS themes use the full `colors` contract; older Windows themes used
     // `palette.accent`. Accept both while keeping one renderer source.
     const colors = Object.keys(declaredColors).length ? declaredColors : legacyPalette;
-    const hasExplicitKeyList = Array.isArray(THEME.explicitColorKeys);
-    const explicit = new Set(hasExplicitKeyList ? THEME.explicitColorKeys : []);
+    // The dark palette may declare a different key subset than the light one,
+    // so it carries its own explicit list; keys it omits still fall through to
+    // the artwork-derived value rather than to the light palette's entry.
+    const explicitKeyList = usingDark && Array.isArray(THEME.explicitDarkColorKeys)
+      ? THEME.explicitDarkColorKeys
+      : THEME.explicitColorKeys;
+    const hasExplicitKeyList = Array.isArray(explicitKeyList);
+    const explicit = new Set(hasExplicitKeyList ? explicitKeyList : []);
     if (!hasExplicitKeyList && (THEME.colorMode === "explicit" || !Object.hasOwn(THEME, "colorMode"))) {
       for (const key of Object.keys(declaredColors)) explicit.add(key);
     }
@@ -317,7 +324,13 @@
     }
     setStyleProperty(root, "--dream-skin-name", cssString(THEME.name || "Codex Dream Skin"));
     setStyleProperty(root, "--dream-skin-tagline", cssString(THEME.tagline || "Make something wonderful."));
-    setStyleProperty(root, "--dream-skin-quote", cssString(THEME.quote || "MAKE SOMETHING WONDERFUL"));
+    // Fork semantics: cornerQuotes[0] wins over the plain quote field, so a
+    // theme that rotates quotes keeps its first entry as the visible one.
+    const cornerQuotes = Array.isArray(THEME.cornerQuotes) && THEME.cornerQuotes.length
+      ? THEME.cornerQuotes : [];
+    setStyleProperty(root, "--dream-skin-quote", cssString(
+      cornerQuotes[0] || THEME.quote || "MAKE SOMETHING WONDERFUL",
+    ));
     setStyleProperty(root, "--dream-skin-brand-subtitle", cssString(
       THEME.brandSubtitle || "CODEX DREAM SKIN",
     ));

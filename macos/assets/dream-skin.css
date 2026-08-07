@@ -1325,20 +1325,106 @@ html[data-dream-skin="active"] [data-ds-part="message"] { border-radius: 16px; }
    (data-dream-skin, data-ds-part) rather than injected classes, so the
    renderer never touches classList or reads layout. */
 
+/* ── Reset zone ──────────────────────────────────────────────────────────
+   Upstream's stylesheet ships byte-for-byte ahead of this one so its own
+   regressions keep asserting against it. That means every decoration it
+   paints is still live here, and anything this theme also paints would be
+   drawn twice. Each rule below copies an upstream selector *verbatim* and
+   switches that decoration off. Copying rather than inventing a broader
+   selector is deliberate: this layer is appended after upstream, so an
+   identical selector wins on source order alone, and if upstream ever
+   edits one of these selectors the copy stops matching in a way that shows
+   up as a diff instead of as a silent no-op.
+
+   Only decorations Hazel does *not* repaint belong here. Where both layers
+   paint the same box, a reset would win the cascade over Hazel's own paint
+   and leave the surface blank — those cases are fixed by giving Hazel's
+   rules the same contract anchors upstream uses, so they tie on specificity
+   and win on order. Each such rule is marked "anchor parity" below. */
+
+/* Upstream veils the whole task surface with the artwork plus two scrims.
+   Hazel paints the artwork into the main surface's own background instead
+   (see [data-ds-part="main"]:not(:has(home-route)) below), so leaving this
+   on renders the character twice at two different scales. Killing `content`
+   on the base rule is enough: the task-mode and banner variants only adjust
+   inset/size/background-image, they never re-declare `content`. */
+html[data-dream-skin="active"]
+  main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"]):not(:has([role="main"]))::before {
+  content: none;
+}
+
+/* The same veil on the renderer's generic fallback shell, for app versions
+   where the selector contract no longer resolves to a real main surface. */
+html[data-dream-skin="active"]:not(:has(main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"]))) [data-ds-part="main"]::before,
+html[data-dream-skin="active"]:not(:has(main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"])))
+  :not(:has([data-ds-part="main"])) > [data-ds-part="home"]::before {
+  content: none;
+}
+
+/* Upstream's compact home hero card: a first-child chain that also paints
+   --dream-skin-art. Codex 26.721+ moved the real content column out from
+   under this chain, so upstream documents it as dormant — but dormant is
+   not off, and if a future DOM restores that nesting it would paint the
+   artwork a second time behind Hazel's own hero. Hazel builds its hero on
+   the game-source node, so this chain is never wanted. */
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) > div:first-child > div:first-child > div:first-child {
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) > div:first-child > div:first-child > div:first-child::before {
+  content: none;
+}
+
+/* A wide image lets upstream paint the artwork onto <body> as a fixed
+   backdrop, on the home route and on task routes alike. Hazel already owns
+   <body> (its dotted wash) and paints the artwork inside the main surface,
+   so these turn the window into a second, full-bleed copy. The selectors
+   are upstream's four wide-art body rules, verbatim. */
+html[data-dream-skin="active"]:is([data-dream-task-mode="ambient"], [data-dream-art-task-mode="ambient"], [data-dream-task-mode="banner"], [data-dream-art-task-mode="banner"])[data-dream-art-wide="true"]:has(main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"])):not(:has(main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"]) [role="main"])) body,
+html[data-dream-skin="active"]:is([data-dream-task-mode="full"], [data-dream-art-task-mode="full"])[data-dream-art-wide="true"]:has(main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"])):not(:has(main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"]) [role="main"])) body,
+html[data-dream-skin="active"][data-dream-art-wide="true"]:not(:has(main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"])))
+  body:has([data-ds-part="main"], [data-ds-part="home"]),
+html[data-dream-skin="active"][data-dream-art-wide="true"]:has(main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"]) [role="main"]) body {
+  /* Not `none`: these selectors outrank Hazel's own body rule, so clearing
+     the longhand outright would take the theme's wash with it. Both sites
+     read the same custom property instead. */
+  background-image: var(--hazel-body-wash) !important;
+  background-attachment: scroll !important;
+}
+
+/* ── End reset zone ───────────────────────────────────────────────────── */
+
 :root[data-dream-skin="active"] {
   color-scheme: light !important;
+  /* The renderer writes the resolved palette as inline custom properties, so
+     the structural five below are fallbacks that inline styles override.
+     The four accent roles are different: the renderer publishes them under
+     upstream's historical names (--ds-green/lime/cyan/purple) and upstream's
+     stylesheet is what maps those onto --ds-accent and friends. Declaring
+     them as literals here is later in the sheet at equal specificity, so it
+     used to beat that mapping and pin the theme to its light-shell accent
+     even when the dark palette was live. Defer to the renderer's value and
+     keep the literal only as the no-theme fallback. */
   --ds-bg: #f3f2f2;
   --ds-panel: rgba(255, 255, 255, .82);
   --ds-panel-2: #e8ebea;
-  --ds-accent: #5c968e;
-  --ds-accent-alt: #7fafa7;
-  --ds-secondary: #d3d3d3;
-  --ds-highlight: #d89ba9;
+  --ds-accent: var(--ds-green, #5c968e);
+  --ds-accent-alt: var(--ds-lime, #7fafa7);
+  --ds-secondary: var(--ds-cyan, #d3d3d3);
+  --ds-highlight: var(--ds-purple, #d89ba9);
   --ds-text: #26312f;
   --ds-muted: #65716f;
   --ds-line: rgba(92, 150, 142, .25);
   --dream-skin-image-position: right;
   --dream-skin-pet-safe-height: 180px;
+  /* Single source for the page wash: the body rule paints it, and the reset
+     zone re-states it on the wide-art selectors that outrank that rule. */
+  --hazel-body-wash:
+    radial-gradient(circle at 86% 3%, color-mix(in srgb, var(--ds-accent-alt) 18%, transparent), transparent 31%),
+    radial-gradient(circle at 16% 8%, color-mix(in srgb, var(--ds-highlight) 13%, transparent), transparent 27%),
+    linear-gradient(145deg, color-mix(in srgb, var(--ds-bg) 94%, white), var(--ds-bg));
 }
 
 html[data-dream-skin="active"][data-dream-shell="dark"] { color-scheme: dark !important; }
@@ -1346,10 +1432,7 @@ html[data-dream-skin="active"][data-dream-shell="dark"] { color-scheme: dark !im
 html[data-dream-skin="active"] body {
   color: var(--ds-text) !important;
   font-family: "SF Pro Rounded", "SF Pro Text", "PingFang SC", system-ui, sans-serif !important;
-  background:
-    radial-gradient(circle at 86% 3%, color-mix(in srgb, var(--ds-accent-alt) 18%, transparent), transparent 31%),
-    radial-gradient(circle at 16% 8%, color-mix(in srgb, var(--ds-highlight) 13%, transparent), transparent 27%),
-    linear-gradient(145deg, color-mix(in srgb, var(--ds-bg) 94%, white), var(--ds-bg)) !important;
+  background: var(--hazel-body-wash) !important;
 }
 
 html[data-dream-skin="active"] body::before {
@@ -1459,7 +1542,7 @@ html[data-dream-skin="active"] aside.app-shell-left-panel [aria-current="page"] 
   box-shadow: inset 3px 0 var(--ds-accent) !important;
 }
 
-html[data-dream-skin="active"] [data-ds-part="main"] {
+html[data-dream-skin="active"] :is(main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"]), [data-ds-part="main"]) {
   color: var(--ds-text) !important;
   background:
     radial-gradient(circle at 88% 7%, color-mix(in srgb, var(--ds-accent-alt) 12%, transparent), transparent 28%),
@@ -1472,7 +1555,7 @@ html[data-dream-skin="active"] [data-ds-part="main"] {
   overflow: hidden !important;
 }
 
-html[data-dream-skin="active"] [data-ds-part="main"]:not(:has([role="main"])) {
+html[data-dream-skin="active"] :is(main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"]), [data-ds-part="main"]):not(:has([role="main"])) {
   background:
     /* Opaque until the artwork actually starts. Fading --ds-bg over a --ds-bg
        base is a no-op visually, but the near-1 alphas still round to ±1 per
@@ -1488,19 +1571,19 @@ html[data-dream-skin="active"] [data-ds-part="main"]:not(:has([role="main"])) {
 /* Fades that ramp to the app's own surface colour still ramp to white in light
    mode, which lands as a bright block with hard edges over the skin's --ds-bg
    — most visible just above the composer. Ramp to the skin's tone instead. */
-html[data-dream-skin="active"] [data-ds-part="main"]
+html[data-dream-skin="active"] :is(main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"]), [data-ds-part="main"])
   [class~="bg-gradient-to-t"][class~="from-token-main-surface-primary"] {
   background-image:
     linear-gradient(to top, var(--ds-bg) 0%, var(--ds-bg) 50%, transparent 100%) !important;
 }
 
-html[data-dream-skin="active"] [data-ds-part="main"]:not(:has([role="main"])) [role="main"] {
+html[data-dream-skin="active"] :is(main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"]), [data-ds-part="main"]):not(:has([role="main"])) [role="main"] {
   color: var(--ds-text) !important;
   background: linear-gradient(90deg, color-mix(in srgb, var(--ds-panel) 38%, transparent), transparent) !important;
   text-shadow: none !important;
 }
 
-html[data-dream-skin="active"] [data-ds-part="main"]:not(:has([role="main"])) article {
+html[data-dream-skin="active"] :is(main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"]), [data-ds-part="main"]):not(:has([role="main"])) article {
   color: var(--ds-text) !important;
   border: 1px solid color-mix(in srgb, var(--ds-accent) 12%, transparent);
   background: color-mix(in srgb, var(--ds-panel) 87%, transparent);
@@ -1512,24 +1595,24 @@ html[data-dream-skin="active"] [data-ds-part="main"]:not(:has([role="main"])) ar
    surface plus a 32px fade strip below it, together blanking out a band of the
    artwork. Drop both and leave just the search pill, on the skin's usual glass
    so the field stays legible over whatever scrolls beneath it. */
-html[data-dream-skin="active"] [data-ds-part="main"]
+html[data-dream-skin="active"] :is(main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"]), [data-ds-part="main"])
   div.sticky[class~="bg-token-main-surface-primary"]:has(input) {
   background: transparent !important;
 }
 
-html[data-dream-skin="active"] [data-ds-part="main"]
+html[data-dream-skin="active"] :is(main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"]), [data-ds-part="main"])
   div.sticky[class~="bg-token-main-surface-primary"]:has(input)::after {
   background: none !important;
 }
 
-html[data-dream-skin="active"] [data-ds-part="main"]
+html[data-dream-skin="active"] :is(main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"]), [data-ds-part="main"])
   div.sticky[class~="bg-token-main-surface-primary"]:has(input) div:has(> input) {
   background: color-mix(in srgb, var(--ds-panel) 80%, transparent) !important;
   border-color: var(--ds-line) !important;
   backdrop-filter: blur(16px) saturate(112%) !important;
 }
 
-html[data-dream-skin="active"] [data-ds-part="main"] > header:is(.app-header-tint, [data-app-shell-header-edge-scroll], [class*="_Header_"]) {
+html[data-dream-skin="active"] :is(main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"]), [data-ds-part="main"]) > header:is(.app-header-tint, [data-app-shell-header-edge-scroll], [class*="_Header_"]) {
   color: var(--ds-text) !important;
   background: color-mix(in srgb, var(--ds-panel) 92%, transparent) !important;
   border-bottom: 1px solid var(--ds-line) !important;
@@ -1540,21 +1623,39 @@ html[data-dream-skin="active"] [data-ds-part="main"] > header:is(.app-header-tin
    per-frame JS writes, so collapsing the sidebar costs one custom-property
    update per frame instead of a layout read plus four style writes. */
 /* Brand, status and quote furniture. Upstream retired the injected overlay
-   element, so these ride on pseudo-elements of real app nodes and are gated by
-   route with :has(), the same way upstream renders its own copy. The header is
+   element, so these ride on pseudo-elements of real app nodes. The header is
    the anchor because it spans the content column and already carries the
-   theme's tint. */
-html[data-dream-skin="active"] [data-ds-part="main"]:has([role="main"])
+   theme's tint.
+
+   Anchor parity, spelled out for both routes. Upstream draws its own brand on
+   the header's ::before/::after, but only off the home route — and that rule
+   carries an extra :not(:has(home-route)), so a single un-gated selector here
+   is one compound lighter and loses on exactly the routes where upstream has
+   something to say. Listing the home and non-home forms separately ties that
+   weight on the task routes (this layer is appended later, so the tie goes to
+   Hazel) and stands unopposed on home. The result is one brand block, drawn by
+   this layer, that does not change font, colour or layout as you navigate.
+
+   The properties upstream sets that this design does not want are cleared here
+   rather than in the reset zone: they live on the same pseudo-element, so they
+   have to lose to this rule, not to a reset that would also suppress the
+   content below. */
+html[data-dream-skin="active"] :is(main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"]), [data-ds-part="main"]):has([role="main"])
+  > header:is(.app-header-tint, [data-app-shell-header-edge-scroll], [class*="_Header_"]),
+html[data-dream-skin="active"] :is(main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"]), [data-ds-part="main"]):not(:has([role="main"]))
   > header:is(.app-header-tint, [data-app-shell-header-edge-scroll], [class*="_Header_"]) {
   position: relative !important;
 }
 
-html[data-dream-skin="active"] [data-ds-part="main"]:has([role="main"])
+html[data-dream-skin="active"] :is(main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"]), [data-ds-part="main"]):has([role="main"])
+  > header:is(.app-header-tint, [data-app-shell-header-edge-scroll], [class*="_Header_"])::before,
+html[data-dream-skin="active"] :is(main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"]), [data-ds-part="main"]):not(:has([role="main"]))
   > header:is(.app-header-tint, [data-app-shell-header-edge-scroll], [class*="_Header_"])::before {
   content: "🩶  " var(--dream-skin-name, "Codex Dream Skin") "\A" var(--dream-skin-brand-subtitle, "CODEX DREAM SKIN");
   position: absolute;
   left: max(23px, calc(240px - (100vw - 100%)));
   top: 2px;
+  z-index: 2;
   display: grid;
   align-content: center;
   white-space: pre;
@@ -1563,14 +1664,22 @@ html[data-dream-skin="active"] [data-ds-part="main"]:has([role="main"])
   font: 700 13px/1.35 "SF Pro Rounded", "PingFang SC", system-ui, sans-serif;
   letter-spacing: .01em;
   text-shadow: 0 1px 0 color-mix(in srgb, white 42%, transparent);
+  /* Upstream's single-line brand clamps to 42%/360px and ellipsises; this one
+     is two lines and must not be clipped. */
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
 }
 
-html[data-dream-skin="active"] [data-ds-part="main"]:has([role="main"])
+html[data-dream-skin="active"] :is(main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"]), [data-ds-part="main"]):has([role="main"])
+  > header:is(.app-header-tint, [data-app-shell-header-edge-scroll], [class*="_Header_"])::after,
+html[data-dream-skin="active"] :is(main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"]), [data-ds-part="main"]):not(:has([role="main"]))
   > header:is(.app-header-tint, [data-app-shell-header-edge-scroll], [class*="_Header_"])::after {
   content: var(--dream-skin-status, "DREAM SKIN ONLINE");
   position: absolute;
   right: 82px;
   top: 3px;
+  z-index: 2;
   height: 40px;
   display: flex;
   align-items: center;
@@ -1578,12 +1687,15 @@ html[data-dream-skin="active"] [data-ds-part="main"]:has([role="main"])
   color: var(--ds-muted);
   font: 700 10px/1 ui-monospace, "SFMono-Regular", monospace;
   letter-spacing: .12em;
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
 }
 
 /* Corner quote, plus the drifting motes that used to be individual <i> nodes.
    One pseudo-element carries them as stacked radial-gradient layers, which
    animates on the compositor instead of laying out a dozen children. */
-html[data-dream-skin="active"] [data-ds-part="main"]:has([role="main"])::after {
+html[data-dream-skin="active"] :is(main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"]), [data-ds-part="main"]):has([role="main"])::after {
   content: var(--dream-skin-quote, "MAKE SOMETHING WONDERFUL");
   position: absolute;
   right: 34px;
@@ -1597,7 +1709,7 @@ html[data-dream-skin="active"] [data-ds-part="main"]:has([role="main"])::after {
   letter-spacing: .02em;
 }
 
-html[data-dream-skin="active"] [data-ds-part="main"]:has([role="main"])::before {
+html[data-dream-skin="active"] :is(main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"]), [data-ds-part="main"]):has([role="main"])::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -1614,27 +1726,41 @@ html[data-dream-skin="active"] [data-ds-part="main"]:has([role="main"])::before 
   animation: hazel-float 5.2s ease-in-out infinite;
 }
 
-html[data-dream-skin="active"] [role="main"] {
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) {
   color: var(--ds-text) !important;
   background: transparent !important;
   scrollbar-color: color-mix(in srgb, var(--ds-accent) 40%, transparent) transparent;
 }
 
-html[data-dream-skin="active"] [role="main"] {
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) {
   --thread-content-max-width: min(980px, calc(100cqw - 44px)) !important;
   overflow-x: hidden !important;
 }
 
-html[data-dream-skin="active"] [role="main"] [role="main"] {
+/* UNRESOLVED MAPPING — intentionally inert, do not "fix" by substituting a
+   structural path. In the class-based fork these two rules addressed the home
+   route's inner content root, a node the old renderer tagged by hand with one
+   of the marker classes that release retired. The port rewrote that marker to
+   the home-route CSS alias, which makes the selector `[role="main"]
+   [role="main"]` — valid CSS that matches nothing, because the home route is
+   never nested inside itself.
+
+   The obvious repair, `[role="main"]:has([data-testid="home-icon"]) > div:first-child`, is
+   wrong: on Codex 26.721+ that child is the (usually empty) .home-banners slot,
+   and forcing min-height:100% on it is exactly the regression upstream fixed in
+   #244 — it pushes the real content column out of the viewport. Reaching the
+   right node needs a fresh DOM fixture, so these stay dead until then rather
+   than shipping a guess that reintroduces a known bug. */
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [role="main"] {
   min-height: 100% !important;
   padding-top: 14px !important;
 }
 
-html[data-dream-skin="active"] [role="main"]:has(.group\/home-suggestions) [role="main"] {
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]):has(.group\/home-suggestions) [role="main"] {
   gap: 10px !important;
 }
 
-html[data-dream-skin="active"] [role="main"]:has(.group\/home-suggestions) [data-feature="game-source"] {
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]):has(.group\/home-suggestions) [data-feature="game-source"] {
   min-height: 276px !important;
   flex: 0 0 276px !important;
   align-items: flex-start !important;
@@ -1642,14 +1768,14 @@ html[data-dream-skin="active"] [role="main"]:has(.group\/home-suggestions) [data
   padding-bottom: 0 !important;
 }
 
-html[data-dream-skin="active"] [role="main"]:not(:has(.group\/home-suggestions)) [data-feature="game-source"] {
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]):not(:has(.group\/home-suggestions)) [data-feature="game-source"] {
   min-height: 452px !important;
   flex: 0 0 452px !important;
   align-items: flex-start !important;
   padding-bottom: 0 !important;
 }
 
-html[data-dream-skin="active"] [role="main"] [data-feature="game-source"] {
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"] {
   position: relative !important;
   isolation: isolate;
   width: calc(100% - 36px) !important;
@@ -1676,14 +1802,21 @@ html[data-dream-skin="active"] [role="main"] [data-feature="game-source"] {
   box-shadow: 0 16px 40px color-mix(in srgb, var(--ds-text) 13%, transparent), inset 0 0 0 3px color-mix(in srgb, var(--ds-secondary) 20%, transparent) !important;
 }
 
-html[data-dream-skin="active"] [role="main"]:not(:has(.group\/home-suggestions)) [data-feature="game-source"] {
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]):not(:has(.group\/home-suggestions)) [data-feature="game-source"] {
   width: calc(100% - 44px) !important;
 }
 
-html[data-dream-skin="active"] [role="main"] [data-feature="game-source"]::before {
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"]::before {
   content: "";
   position: absolute;
-  z-index: 0;
+  /* Negative, not 0. In the class-based fork this scrim hung off a separate
+     hero-frame node and the title lived in a descendant, so paint order put
+     the text on top for free. Here both land on game-source, and a positioned
+     z-index:0 pseudo-element paints *after* its host's inline content — the
+     scrim greyed out "我们该构建什么？". The host sets isolation:isolate, so a
+     negative index stays inside this card: above its background (the artwork)
+     and below the title. */
+  z-index: -1;
   inset: 0 auto 0 0;
   width: 62%;
   pointer-events: none;
@@ -1693,12 +1826,12 @@ html[data-dream-skin="active"] [role="main"] [data-feature="game-source"]::befor
     repeating-linear-gradient(135deg, transparent 0 14px, color-mix(in srgb, var(--ds-secondary) 14%, transparent) 14px 15px);
 }
 
-html[data-dream-skin="active"] [role="main"] [data-feature="game-source"]::after {
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"]::after {
   content: none;
   display: none;
 }
 
-html[data-dream-skin="active"] [role="main"] [data-feature="game-source"] {
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"] {
   position: relative;
   z-index: 3;
   box-sizing: border-box;
@@ -1709,15 +1842,15 @@ html[data-dream-skin="active"] [role="main"] [data-feature="game-source"] {
   justify-content: flex-start !important;
 }
 
-html[data-dream-skin="active"] [role="main"] [data-feature="game-source"] > * {
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"] > * {
   width: 58% !important;
   gap: 0 !important;
   align-items: flex-start !important;
 }
 
-html[data-dream-skin="active"] [role="main"] [data-testid="home-icon"] { display: none !important; }
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-testid="home-icon"] { display: none !important; }
 
-html[data-dream-skin="active"] [role="main"] [data-feature="game-source"] {
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"] {
   display: block !important;
   max-width: 100% !important;
   color: var(--ds-text) !important;
@@ -1730,7 +1863,7 @@ html[data-dream-skin="active"] [role="main"] [data-feature="game-source"] {
   pointer-events: auto !important;
 }
 
-html[data-dream-skin="active"] [role="main"] [data-feature="game-source"]::before {
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"]::before {
   content: var(--dream-skin-hero-title, "灰泽满 Hazel");
   display: block;
   margin-bottom: 10px;
@@ -1739,7 +1872,7 @@ html[data-dream-skin="active"] [role="main"] [data-feature="game-source"]::befor
   letter-spacing: .08em;
 }
 
-html[data-dream-skin="active"] [role="main"] [data-feature="game-source"]::after {
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"]::after {
   content: var(--dream-skin-hero-subtitle, "灰泽满究竟爱不爱绿冻？早就说过很爱了");
   display: block;
   margin-top: 14px;
@@ -1748,7 +1881,7 @@ html[data-dream-skin="active"] [role="main"] [data-feature="game-source"]::after
   letter-spacing: .03em;
 }
 
-html[data-dream-skin="active"] [role="main"] [data-feature="game-source"] button {
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"] button {
   margin: 0 5px;
   padding: 2px 9px 3px;
   color: var(--ds-accent) !important;
@@ -1760,7 +1893,7 @@ html[data-dream-skin="active"] [role="main"] [data-feature="game-source"] button
   text-underline-offset: 5px;
 }
 
-html[data-dream-skin="active"] [role="main"] [data-feature="game-source"] button::before {
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"] button::before {
   content: var(--dream-skin-project-prefix, "选择项目 · ");
   font-size: .46em;
   font-weight: 700;
@@ -1768,9 +1901,9 @@ html[data-dream-skin="active"] [role="main"] [data-feature="game-source"] button
   opacity: .88;
 }
 
-html[data-dream-skin="active"] [role="main"] .group\/home-suggestions { overflow: visible !important; }
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) .group\/home-suggestions { overflow: visible !important; }
 
-html[data-dream-skin="active"] [role="main"]:not(:has(.group\/home-suggestions)) .group\/home-suggestions > * {
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]):not(:has(.group\/home-suggestions)) .group\/home-suggestions > * {
   position: absolute !important;
   left: 14px !important;
   right: 14px !important;
@@ -1782,13 +1915,7 @@ html[data-dream-skin="active"] [role="main"]:not(:has(.group\/home-suggestions))
   opacity: 1 !important;
 }
 
-html[data-dream-skin="active"] [role="main"]:has(.group\/home-suggestions) [role="main"]-composer-zone {
-  min-height: 0 !important;
-  flex: 1 1 auto !important;
-  justify-content: flex-end !important;
-}
-
-html[data-dream-skin="active"] [role="main"]:has(.group\/home-suggestions) .group\/home-suggestions > * {
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]):has(.group\/home-suggestions) .group\/home-suggestions > * {
   position: relative !important;
   inset: auto !important;
   z-index: 6 !important;
@@ -1798,13 +1925,13 @@ html[data-dream-skin="active"] [role="main"]:has(.group\/home-suggestions) .grou
   opacity: 1 !important;
 }
 
-html[data-dream-skin="active"] [role="main"] .group\/home-suggestions {
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) .group\/home-suggestions {
   overflow: visible !important;
   visibility: visible !important;
   opacity: 1 !important;
 }
 
-html[data-dream-skin="active"] [role="main"]:has(.group\/home-suggestions) .group\/home-suggestions {
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]):has(.group\/home-suggestions) .group\/home-suggestions {
   height: auto !important;
   min-height: 0 !important;
   max-height: none !important;
@@ -1816,7 +1943,7 @@ html[data-dream-skin="active"] [role="main"]:has(.group\/home-suggestions) .grou
   backdrop-filter: none !important;
 }
 
-html[data-dream-skin="active"] [role="main"]:has(.group\/home-suggestions) .group\/home-suggestions {
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]):has(.group\/home-suggestions) .group\/home-suggestions {
   width: 100% !important;
   height: auto !important;
   min-height: 0 !important;
@@ -1833,14 +1960,14 @@ html[data-dream-skin="active"] [role="main"]:has(.group\/home-suggestions) .grou
   transition: color .16s ease, background .16s ease, border-left-color .16s ease !important;
 }
 
-html[data-dream-skin="active"] [role="main"]:has(.group\/home-suggestions) .group\/home-suggestions:hover,
-html[data-dream-skin="active"] [role="main"]:has(.group\/home-suggestions) .group\/home-suggestions:focus-visible {
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]):has(.group\/home-suggestions) .group\/home-suggestions:hover,
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]):has(.group\/home-suggestions) .group\/home-suggestions:focus-visible {
   color: var(--ds-text) !important;
   border-left-color: var(--ds-accent) !important;
   background: linear-gradient(90deg, color-mix(in srgb, var(--ds-accent) 10%, transparent), transparent) !important;
 }
 
-html[data-dream-skin="active"] [role="main"]:has(.group\/home-suggestions) .group\/home-suggestions > span:first-child {
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]):has(.group\/home-suggestions) .group\/home-suggestions > span:first-child {
   width: 22px !important;
   height: 22px !important;
   display: grid !important;
@@ -1851,14 +1978,14 @@ html[data-dream-skin="active"] [role="main"]:has(.group\/home-suggestions) .grou
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ds-accent) 18%, transparent) !important;
 }
 
-html[data-dream-skin="active"] [role="main"]:has(.group\/home-suggestions) .group\/home-suggestions > span:first-child img,
-html[data-dream-skin="active"] [role="main"]:has(.group\/home-suggestions) .group\/home-suggestions > span:first-child svg {
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]):has(.group\/home-suggestions) .group\/home-suggestions > span:first-child img,
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]):has(.group\/home-suggestions) .group\/home-suggestions > span:first-child svg {
   width: 15px !important;
   height: 15px !important;
   object-fit: contain !important;
 }
 
-html[data-dream-skin="active"] [role="main"]:has(.group\/home-suggestions) .group\/home-suggestions > span:last-child {
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]):has(.group\/home-suggestions) .group\/home-suggestions > span:last-child {
   min-width: 0 !important;
   color: inherit !important;
   line-height: 1.45 !important;
@@ -1866,7 +1993,7 @@ html[data-dream-skin="active"] [role="main"]:has(.group\/home-suggestions) .grou
   overflow-wrap: anywhere !important;
 }
 
-html[data-dream-skin="active"] [role="main"] [role="main"]-card {
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) .group\/home-suggestions button {
   position: relative !important;
   min-height: 126px !important;
   padding: 14px 13px 12px !important;
@@ -1887,13 +2014,13 @@ html[data-dream-skin="active"] [role="main"] [role="main"]-card {
   transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease !important;
 }
 
-html[data-dream-skin="active"] [role="main"] [role="main"]-card:hover {
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) .group\/home-suggestions button:hover {
   transform: translateY(-3px) !important;
   border-color: color-mix(in srgb, var(--ds-accent) 48%, transparent) !important;
   box-shadow: 0 14px 30px color-mix(in srgb, var(--ds-text) 12%, transparent), 0 0 0 2px color-mix(in srgb, var(--ds-accent) 7%, transparent) !important;
 }
 
-html[data-dream-skin="active"] [role="main"] [role="main"]-card > span:first-child > span:first-child {
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) .group\/home-suggestions button > span:first-child > span:first-child {
   position: relative !important;
   width: 38px;
   height: 38px;
@@ -1906,7 +2033,7 @@ html[data-dream-skin="active"] [role="main"] [role="main"]-card > span:first-chi
   box-shadow: 0 0 0 7px color-mix(in srgb, var(--ds-accent) 8%, transparent), 0 5px 14px color-mix(in srgb, var(--ds-text) 16%, transparent);
 }
 
-html[data-dream-skin="active"] [role="main"] [role="main"]-card svg {
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) .group\/home-suggestions button svg {
   position: absolute !important;
   left: 50% !important;
   top: 50% !important;
@@ -1918,13 +2045,13 @@ html[data-dream-skin="active"] [role="main"] [role="main"]-card svg {
   transform: translate(-50%, -50%) !important;
 }
 
-html[data-dream-skin="active"] [role="main"] [role="main"]-card > span:first-child {
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) .group\/home-suggestions button > span:first-child {
   width: 100% !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
 }
-html[data-dream-skin="active"] [role="main"] [role="main"]-card > span:last-child { align-items: center !important; text-align: center !important; }
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) .group\/home-suggestions button > span:last-child { align-items: center !important; text-align: center !important; }
 
 html[data-dream-skin="active"] .composer-surface-chrome {
   border: 1px solid color-mix(in srgb, var(--ds-accent) 28%, transparent) !important;
@@ -1954,7 +2081,7 @@ html[data-dream-skin="active"] .composer-surface-chrome::before {
   box-shadow: 0 0 14px color-mix(in srgb, var(--ds-accent) 22%, transparent);
 }
 
-html[data-dream-skin="active"] [role="main"] div:has(> .horizontal-scroll-fade-mask .group\/project-selector) {
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) div:has(> .horizontal-scroll-fade-mask .group\/project-selector) {
   position: relative;
   padding-top: 28px !important;
   border: 1px solid color-mix(in srgb, var(--ds-accent) 15%, transparent);
@@ -1962,7 +2089,7 @@ html[data-dream-skin="active"] [role="main"] div:has(> .horizontal-scroll-fade-m
   background: color-mix(in srgb, var(--ds-panel) 92%, transparent) !important;
 }
 
-html[data-dream-skin="active"] [role="main"] div:has(> .horizontal-scroll-fade-mask .group\/project-selector)::before {
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) div:has(> .horizontal-scroll-fade-mask .group\/project-selector)::before {
   content: var(--dream-skin-project-label, "🩶  选择项目");
   position: absolute;
   left: 13px;
@@ -1975,14 +2102,14 @@ html[data-dream-skin="active"] [role="main"] div:has(> .horizontal-scroll-fade-m
   white-space: nowrap;
 }
 
-html[data-dream-skin="active"] [role="main"] .group\/project-selector > button {
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) .group\/project-selector > button {
   color: var(--ds-text) !important;
   border-color: color-mix(in srgb, var(--ds-accent) 28%, transparent) !important;
   background: linear-gradient(135deg, color-mix(in srgb, var(--ds-accent) 10%, var(--ds-panel)), color-mix(in srgb, var(--ds-highlight) 7%, var(--ds-panel))) !important;
   box-shadow: 0 3px 12px color-mix(in srgb, var(--ds-text) 8%, transparent) !important;
 }
 
-html[data-dream-skin="active"] [role="main"] .group\/project-selector {
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) .group\/project-selector {
   color: var(--ds-text) !important;
   border-color: color-mix(in srgb, var(--ds-accent) 28%, transparent) !important;
   background: linear-gradient(135deg, color-mix(in srgb, var(--ds-accent) 10%, var(--ds-panel)), color-mix(in srgb, var(--ds-highlight) 7%, var(--ds-panel))) !important;
@@ -2022,7 +2149,7 @@ html[data-dream-skin="active"][data-dream-shell="dark"] [role="main"] [data-feat
     repeating-linear-gradient(135deg, transparent 0 14px, color-mix(in srgb, var(--ds-secondary) 8%, transparent) 14px 15px);
 }
 
-html[data-dream-skin="active"][data-dream-shell="dark"] [data-ds-part="main"]:not(:has([role="main"])) {
+html[data-dream-skin="active"][data-dream-shell="dark"] :is(main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"]), [data-ds-part="main"]):not(:has([role="main"])) {
   background:
     linear-gradient(90deg,
       var(--ds-bg) 0%,
@@ -2038,32 +2165,38 @@ html[data-dream-skin="active"][data-dream-shell="dark"] [data-ds-part="main"]:no
 }
 
 @media (max-width: 1120px) {
-  html[data-dream-skin="active"] [role="main"] { --thread-content-max-width: min(870px, calc(100cqw - 30px)) !important; }
-  html[data-dream-skin="active"] [role="main"] [data-feature="game-source"] { width: calc(100% - 28px) !important; }
-  html[data-dream-skin="active"] [role="main"] [data-feature="game-source"]::after { display: none; }
+  html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) { --thread-content-max-width: min(870px, calc(100cqw - 30px)) !important; }
+  html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"] { width: calc(100% - 28px) !important; }
+  html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"]::after { display: none; }
+  /* Upstream drops its corner quote below this width because the composer and
+     the project picker already crowd the bottom of the main surface. Hazel's
+     quote sits in the same corner, so it follows the same rule. Stated here
+     rather than inherited: now that the quote rule above has upstream's
+     anchors it would otherwise outrank upstream's media query and reappear. */
+  html[data-dream-skin="active"] :is(main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"]), [data-ds-part="main"]):has([role="main"])::after { content: none; }
 }
 
 @media (max-width: 900px) {
-  html[data-dream-skin="active"] [role="main"]:has(.group\/home-suggestions) [data-feature="game-source"] { min-height: 236px !important; flex-basis: 236px !important; }
-  html[data-dream-skin="active"] [role="main"]:not(:has(.group\/home-suggestions)) [data-feature="game-source"] { min-height: 410px !important; flex-basis: 410px !important; }
-  html[data-dream-skin="active"] [role="main"] [data-feature="game-source"] { height: 230px !important; min-height: 230px !important; background-size: 100% 100%, 100% 100%, auto 122% !important; }
-  html[data-dream-skin="active"] [role="main"] [data-feature="game-source"] { padding: 26px 0 0 25px !important; }
-  html[data-dream-skin="active"] [role="main"] [data-feature="game-source"] > * { width: 67% !important; }
-  html[data-dream-skin="active"] [role="main"] [data-feature="game-source"] { font-size: 18px !important; }
-  html[data-dream-skin="active"] [role="main"] [data-feature="game-source"]::before { margin-bottom: 7px; font-size: 10px; }
-  html[data-dream-skin="active"] [role="main"] [data-feature="game-source"]::after { margin-top: 9px; font-size: 11px; }
-  html[data-dream-skin="active"] [role="main"] [role="main"]-card { min-height: 114px !important; font-size: 12px !important; }
+  html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]):has(.group\/home-suggestions) [data-feature="game-source"] { min-height: 236px !important; flex-basis: 236px !important; }
+  html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]):not(:has(.group\/home-suggestions)) [data-feature="game-source"] { min-height: 410px !important; flex-basis: 410px !important; }
+  html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"] { height: 230px !important; min-height: 230px !important; background-size: 100% 100%, 100% 100%, auto 122% !important; }
+  html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"] { padding: 26px 0 0 25px !important; }
+  html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"] > * { width: 67% !important; }
+  html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"] { font-size: 18px !important; }
+  html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"]::before { margin-bottom: 7px; font-size: 10px; }
+  html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"]::after { margin-top: 9px; font-size: 11px; }
+  html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) .group\/home-suggestions button { min-height: 114px !important; font-size: 12px !important; }
 }
 
 @media (max-width: 720px) {
-  html[data-dream-skin="active"] [role="main"] [data-feature="game-source"] {
+  html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"] {
     background-image:
       linear-gradient(120deg, color-mix(in srgb, var(--ds-panel-2) 97%, white), color-mix(in srgb, var(--ds-accent-alt) 18%, var(--ds-panel-2))) !important;
   }
-  html[data-dream-skin="active"] [role="main"] [data-feature="game-source"]::before { width: 100%; }
-  html[data-dream-skin="active"] [role="main"] [data-feature="game-source"] > * { width: calc(100% - 28px) !important; }
-  html[data-dream-skin="active"] [role="main"]:has(.group\/home-suggestions) .group\/home-suggestions { font-size: 11px !important; }
-  html[data-dream-skin="active"] [data-ds-part="main"]:not(:has([role="main"])) { background: var(--ds-bg) !important; }
+  html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"]::before { width: 100%; }
+  html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"] > * { width: calc(100% - 28px) !important; }
+  html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]):has(.group\/home-suggestions) .group\/home-suggestions { font-size: 11px !important; }
+  html[data-dream-skin="active"] :is(main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"]), [data-ds-part="main"]):not(:has([role="main"])) { background: var(--ds-bg) !important; }
 }
 
 @media (prefers-reduced-motion: reduce) {
