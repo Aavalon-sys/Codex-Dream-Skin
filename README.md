@@ -1,132 +1,115 @@
-# Codex Dream Skin
+<div align="center">
 
-> **灰泽满 Hazel 同人定制版**：macOS 源码位于 [`macos/`](./macos/)，双击安装包发布在 [Releases](https://github.com/Aavalon-sys/Codex-Dream-Skin/releases)。本仓库是 [Fei-Away/Codex-Dream-Skin](https://github.com/Fei-Away/Codex-Dream-Skin) 的公开 fork；角色素材不属于 MIT 许可范围，相关权利归原作者及角色方所有。
+# 灰泽满 Hazel · Codex 主题
 
-<p align="center">
-  <strong>中文</strong> · <a href="./README.en.md">English</a>
-</p>
+给 macOS 版 Codex / ChatGPT 桌面端换上灰泽满的皮肤。<br>
+以她的代表色 `#D3D3D3` 为底，绿冻色作交互强调，配官方立绘与语录。
 
-<p align="center">
-  <strong>给 Codex 桌面端换一张会呼吸的脸。</strong><br>
-  外部主题 / 换肤工具 · 本机 CDP 注入 · 不改官方安装包
-</p>
+<sub>非官方项目 · 与 OpenAI 无关 · 基于 <a href="https://github.com/Fei-Away/Codex-Dream-Skin">Codex Dream Skin</a></sub>
 
-<p align="center">
-  一张图，一种心情 · 写代码，也要有氛围感
-</p>
-
-<p align="center">
-  非 OpenAI 官方产品。不修改 <code>.app</code> / <code>app.asar</code> / WindowsApps。
-</p>
-
-## 赞助商
-
-<p align="center">
-  <a href="https://passion8.cc/register?aff=TuPe">
-    <img src="docs/images/sponsor-passion8.png" alt="Passion8" height="72">
-  </a>
-</p>
-
-<p align="center">
-  <strong>更智能的连接 · 更热爱的创造</strong><br>
-  <sub>热爱驱动 · 无限可能 · Connect AI · Power Creation</sub>
-</p>
-
-<p align="center">
-  感谢 <a href="https://passion8.cc/register?aff=TuPe"><strong>passion8.cc</strong></a> 赞助本项目。<br>
-  满血 AI 中转：官方模型直连，无降智、无套壳；一行配置接入 Codex / Claude Code / Grok。
-</p>
-
-<p align="center">
-  <sub>
-    换肤与 API 配置互相独立，本项目不会自动改写你的模型供应商设置。
-  </sub>
-</p>
-
-## 效果预览
-
-一张图，一种心情。下面都是可落地的主题示意效果：
-
-<p align="center">
-  <img src="docs/images/gallery/skin-01.jpg" alt="粉系定制" width="900"><br>
-  <sub>粉系定制</sub>
-</p>
-
-<p align="center">
-  <img src="docs/images/gallery/skin-02.jpg" alt="财神打工" width="900"><br>
-  <sub>财神打工版</sub>
-</p>
-
-<p align="center">
-  <img src="docs/images/gallery/skin-03.jpg" alt="红白科幻" width="900"><br>
-  <sub>红白科幻</sub>
-</p>
-
-<p align="center">
-  <img src="docs/images/gallery/skin-04.jpg" alt="清透定制" width="900"><br>
-  <sub>清透定制</sub>
-</p>
-
-<p align="center">
-  <img src="docs/images/gallery/skin-05.jpg" alt="灵感小宇宙" width="900"><br>
-  <sub>灵感小宇宙</sub>
-</p>
-
-<p align="center">
-  <img src="docs/images/gallery/skin-06.jpg" alt="紫夜限定" width="900"><br>
-  <sub>紫夜限定</sub>
-</p>
-
-<p align="center">
-  <img src="docs/images/gallery/skin-07.jpg" alt="初音未来" width="900"><br>
-  <sub>初音未来</sub>
-</p>
-
-<p align="center">
-  <img src="docs/images/gallery/skin-08.jpg" alt="舞台黑金" width="900"><br>
-  <sub>舞台黑金</sub>
-</p>
-
-## 它能做什么
-
-- **真·可交互**：侧栏、建议卡、项目选择、输入框都是原生控件，不是整窗假截图贴上去
-- **可换图**：换一张喜欢的图，就能变成你的主题
-- **可恢复**：一键还原官方外观
-- **相对安全**：本机回环 CDP 注入，不改官方二进制与签名
-
-## 快速开始
-
-仓库内按平台放了现成脚本（实现细节不同，效果都是「主题化 Codex」）：
-
-| 平台 | 目录 | 入口 |
-|------|------|------|
-| Apple Silicon / Intel Mac | [`macos/`](./macos/) | 双击 `Install Codex Dream Skin.command` |
-| Windows | [`windows/`](./windows/) | `scripts/install-dream-skin.ps1` → `start-dream-skin.ps1` |
-
-更细的说明：
-
-- Mac：[`macos/README.md`](./macos/README.md)
-- Windows：[`windows/SKILL.md`](./windows/SKILL.md)
-- 路径对照：[`docs/platforms.md`](./docs/platforms.md)
-- 项目记录：[`docs/PROJECT.md`](./docs/PROJECT.md)
-
-## 反馈与贡献
-
-- **Issue：** 请用 [Issue 模板](./.github/ISSUE_TEMPLATE/)（Bug / 功能）；已关闭空白 Issue。提交前建议先跑 Verify / Restore 自检。
-- **PR：** 请按 [PR 模板](./.github/pull_request_template.md) 写清改动，并勾选对应自测（如 `macos/tests/run-tests.sh`、verify / restore）。
-
-## 安全边界
-
-- CDP 只绑 `127.0.0.1`，主题运行期间勿跑来路不明的本机程序
-- 不修改官方安装目录与代码签名
-- **不会**自动改写 API Key / Base URL；中转与换肤分开
-
-## 许可与声明
-
-- 见 [`macos/LICENSE`](./macos/LICENSE)（MIT）与 [`macos/NOTICE.md`](./macos/NOTICE.md)
-- 非 OpenAI 官方产品；Codex 及相关权利归其权利人
-- 效果图中的人物 / IP 形象仅作主题示意；商用或公开再分发请自行确认肖像权与商标授权
+</div>
 
 ---
 
-Star 一下，然后挑一张图，把你的 Codex 变成今天想要的样子。
+## 长这样
+
+Codex 首页，深色与浅色跟随应用自动切换：
+
+<div align="center">
+  <img src="docs/images/hazel/codex-home-dark.png" width="49%" alt="Codex 首页 深色">
+  <img src="docs/images/hazel/codex-home-light.png" width="49%" alt="Codex 首页 浅色">
+</div>
+
+切到 ChatGPT 那侧同样生效，聊天与工作模式都覆盖：
+
+<div align="center">
+  <img src="docs/images/hazel/chatgpt-chat-light.png" width="49%" alt="ChatGPT 聊天 浅色">
+  <img src="docs/images/hazel/chatgpt-work-dark.png" width="49%" alt="ChatGPT 工作 深色">
+</div>
+
+---
+
+## 一键安装
+
+macOS，终端里跑这一行：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Aavalon-sys/Codex-Dream-Skin/agent/public-hazel-release/install.sh | bash
+```
+
+脚本会取最新发布包、校验 SHA-256、解压后调用安装器。装完重启一次 Codex 就能看到。
+
+> 走 `curl` 而不是浏览器下载是有意的：浏览器会给文件打上 `com.apple.quarantine`，
+> 解压后双击 `.command` 会被 Gatekeeper 拦成「未识别的开发者」。curl 不打这个标记。
+
+想保留当前已激活的主题（只换引擎、不换皮肤内容）：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Aavalon-sys/Codex-Dream-Skin/agent/public-hazel-release/install.sh | bash -s -- --keep-active-theme
+```
+
+装好后，安装目录里有几个双击就能用的入口：
+
+| 入口 | 作用 |
+| --- | --- |
+| `Start Codex Dream Skin.command` | 带调试端口启动 Codex 并注入皮肤 |
+| `Verify Codex Dream Skin.command` | 检查皮肤是否真的生效 |
+| `Restore Codex Dream Skin.command` | 还原官方外观 |
+| `Customize Codex Dream Skin.command` | 换背景图、调配色 |
+
+---
+
+## 主题内容
+
+**配色**取自角色本身：代表色 `#D3D3D3` 浅灰做基底，粉丝名「绿冻」对应的 `#5C968E` 作强调色，
+点缀色来自立绘上风纪袖章的樱桃红。深色与浅色两套色板独立调过，跟随 Codex 的外观设置自动切换。
+
+**文案**用的是她的名场面：
+
+- 标题 —— 我们该构建什么？
+- 副标题 —— 灰泽满究竟爱不爱绿冻？早就说过很爱了
+- 角落语录 —— 又怎么了我的大绿冻……
+- 状态灯 —— 🩶 HAZEL ONLINE
+
+这些都在 `macos/assets/theme.json` 里，改完重新应用即可，不用碰 CSS。
+
+**界面**上做了这些处理：圆角面板与侧边栏对称、面板圆角缺口填成统一底色、
+侧边栏收起时标题块自动避开红黄绿三键、折叠动画由单个 CSS 变量驱动以免掉帧。
+
+---
+
+## 卸载
+
+```bash
+~/.codex/codex-dream-skin-studio/Restore\ Codex\ Dream\ Skin.command
+```
+
+或直接双击安装目录里的 `Restore Codex Dream Skin.command`。
+它会还原 Codex 的原始外观设置，并停掉注入器。
+
+---
+
+## 素材版权
+
+**立绘与贴纸来自灰泽满的官方发布内容，版权归原作者与角色相关方所有，不在本项目的 MIT 许可范围内。**
+
+本仓库的 MIT 许可只覆盖**软件代码**（脚本、CSS、注入器）。它不授予：
+
+- 角色立绘、形象、周边图像的任何权利
+- OpenAI / Codex / ChatGPT 的商标、产品名与外观
+- 官方应用二进制
+
+个人使用之外的任何再分发或商用，需要自行取得相应授权。权利方如需下架，请提 issue，会尽快处理。
+
+详见 [`macos/NOTICE.md`](macos/NOTICE.md)。
+
+---
+
+## 致谢
+
+上游项目 [Fei-Away/Codex-Dream-Skin](https://github.com/Fei-Away/Codex-Dream-Skin)
+——注入器、安装流程、主题契约都出自那里，这个 fork 只是在它之上做了一套灰泽满配色与版式。
+
+角色：**灰泽满 Hazel**（VirtuaReal 二十七期）·
+[B 站](https://space.bilibili.com/1298779265) ·
+[萌娘百科](https://zh.moegirl.org.cn/灰泽满)

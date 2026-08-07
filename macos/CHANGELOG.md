@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.3-hazel.1 — 2026-08-07
+
+- Corner quote now reads 又怎么了我的大绿冻…… .
+- Rewrite the repository README around the Hazel theme, with live screenshots of both shells in light and dark, and drop the inherited sponsor sections and affiliate links.
+
 ## 1.4.2-hazel.1 — 2026-08-06
 
 - Stop the render pass throwing once the quote moved into the hero. 1.4.1 still reached for that node through the chrome overlay, so every pass died on a null before the route-state toggle ran — leaving the brand and status stuck on over thread pages, where they landed on the conversation title and the share button. The text lookups now fall back to the document and tolerate a missing node.
