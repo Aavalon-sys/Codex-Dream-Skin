@@ -1,27 +1,48 @@
 {
   "schemaVersion": 1,
-  "id": "custom-1784123441349",
-  "name": "Dream Skin",
-  "brandSubtitle": "CODEX DREAM SKIN",
-  "tagline": "把喜欢的画面变成可交互的 Codex 工作台。",
+  "id": "hazel-codex-v1",
+  "name": "灰泽满 Hazel",
+  "brandSubtitle": "绿冻工作台",
+  "heroTitle": "灰泽满 Hazel",
+  "heroSubtitle": "灰泽满究竟爱不爱绿冻？早就说过很爱了",
+  "tagline": "灰泽满究竟爱不爱绿冻？早就说过很爱了",
   "projectPrefix": "选择项目 · ",
-  "projectLabel": "◉  选择项目",
-  "statusText": "THEME ONLINE",
-  "quote": "Make something wonderful",
-  "image": "portal-hero.png",
-  "colors": {
-    "background": "#F7F4F5",
-    "panel": "#FFFFFF",
-    "panelAlt": "#FFF7F8",
-    "accent": "#E25563",
-    "accentAlt": "#F07A86",
-    "secondary": "#F3A8AF",
-    "highlight": "#C93D4C",
-    "text": "#2B2224",
-    "muted": "#8A7A7D",
-    "line": "rgba(196, 120, 128, .22)"
+  "projectLabel": "🩶  选择项目",
+  "statusText": "🩶 HAZEL ONLINE",
+  "quote": "不好意思，只是通知你一下。",
+  "cornerQuotes": [
+    "不好意思，只是通知你一下。",
+    "心情好的时候，她会吃上一个；心情不好的时候，就一口气吃掉三个。"
+  ],
+  "image": "hazel-hero.png",
+  "sticker": "hazel-sticker.png",
+  "imagePosition": "right",
+  "petSafeArea": {
+    "edge": "bottom",
+    "minHeight": 180
   },
-  "promoTitle": "感谢 Passion8 赞助",
-  "promoSub": "passion8.cc",
-  "promoUrl": "https://passion8.cc/register?aff=TuPe"
+  "colors": {
+    "background": "#F3F2F2",
+    "panel": "rgba(255, 255, 255, 0.82)",
+    "panelAlt": "#E8EBEA",
+    "accent": "#5C968E",
+    "accentAlt": "#7FAFA7",
+    "secondary": "#D3D3D3",
+    "highlight": "#D89BA9",
+    "text": "#26312F",
+    "muted": "#65716F",
+    "line": "rgba(92, 150, 142, 0.25)"
+  },
+  "darkColors": {
+    "background": "#171A1A",
+    "panel": "rgba(31, 38, 37, 0.90)",
+    "panelAlt": "#29302F",
+    "accent": "#8FBFB6",
+    "accentAlt": "#A5CEC6",
+    "secondary": "#D3D3D3",
+    "highlight": "#D8A0AD",
+    "text": "#F2F4F3",
+    "muted": "#B7C1BF",
+    "line": "rgba(143, 191, 182, 0.30)"
+  }
 }

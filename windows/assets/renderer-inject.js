@@ -229,7 +229,13 @@
   };
 
   const applyTheme = (root, shell) => {
-    const declaredColors = THEME.colors && typeof THEME.colors === "object" ? THEME.colors : {};
+    // Themes may ship a second palette for the dark shell. Upstream derives one
+    // from the artwork instead, so without this a hand-tuned dark palette would
+    // silently fall back to the light one.
+    const darkColors = THEME.darkColors && typeof THEME.darkColors === "object" ? THEME.darkColors : null;
+    const declaredColors = shell === "dark" && darkColors
+      ? darkColors
+      : (THEME.colors && typeof THEME.colors === "object" ? THEME.colors : {});
     const legacyPalette = THEME.palette && typeof THEME.palette === "object" ? THEME.palette : {};
     // macOS themes use the full `colors` contract; older Windows themes used
     // `palette.accent`. Accept both while keeping one renderer source.
@@ -318,6 +324,15 @@
     setStyleProperty(root, "--dream-skin-status", cssString(THEME.statusText || "DREAM SKIN ONLINE"));
     setStyleProperty(root, "--dream-skin-project-prefix", cssString(THEME.projectPrefix || "选择项目 · "));
     setStyleProperty(root, "--dream-skin-project-label", cssString(THEME.projectLabel || "◉  选择项目"));
+    // Fields the Hazel layer adds on top of the upstream theme contract.
+    setStyleProperty(root, "--dream-skin-hero-title", cssString(
+      THEME.heroTitle || THEME.name || "Codex Dream Skin",
+    ));
+    setStyleProperty(root, "--dream-skin-hero-subtitle", cssString(
+      THEME.heroSubtitle || THEME.tagline || "Make something wonderful.",
+    ));
+    setStyleProperty(root, "--dream-skin-image-position", THEME.imagePosition || "right");
+    setStyleProperty(root, "--dream-skin-pet-safe-height", `${THEME.petSafeArea?.minHeight || 0}px`);
   };
 
   const applyArtMetadata = (root) => {
