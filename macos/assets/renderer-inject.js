@@ -390,11 +390,19 @@
     // Earlier builds positioned the overlay with inline styles; the stylesheet
     // drives it now, so drop any left over from a previous injection.
     for (const prop of ["left", "top", "width", "height"]) chrome.style.removeProperty(prop);
-    chrome.querySelector(".dream-skin-brand b").textContent = THEME.name || "Codex Dream Skin";
-    chrome.querySelector(".dream-skin-brand small").textContent = THEME.brandSubtitle || "CODEX DREAM SKIN";
-    chrome.querySelector(".dream-skin-status span").textContent = THEME.statusText || "DREAM SKIN ONLINE";
-    chrome.querySelector(".dream-skin-quote").textContent = quotes[0] || "";
-    chrome.querySelector(".dream-skin-footer-quote").textContent = quotes[1] || "";
+    // The quote node gets parked in the hero, so look these up document-wide
+    // and tolerate a missing one. Reaching through `chrome` alone threw once the
+    // quote moved out, which killed the rest of the pass — including the
+    // route-state toggle below, leaving the brand stuck on over thread pages.
+    const setText = (selector, value) => {
+      const node = chrome.querySelector(selector) ?? document.querySelector(selector);
+      if (node) node.textContent = value;
+    };
+    setText(".dream-skin-brand b", THEME.name || "Codex Dream Skin");
+    setText(".dream-skin-brand small", THEME.brandSubtitle || "CODEX DREAM SKIN");
+    setText(".dream-skin-status span", THEME.statusText || "DREAM SKIN ONLINE");
+    setText(".dream-skin-quote", quotes[0] || "");
+    setText(".dream-skin-footer-quote", quotes[1] || "");
     syncLayout();
     chrome.classList.toggle("dream-skin-home-shell", Boolean(home));
     chrome.dataset.dreamShell = shell;

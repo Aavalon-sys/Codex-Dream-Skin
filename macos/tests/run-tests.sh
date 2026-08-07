@@ -234,7 +234,7 @@ NO_DESKTOP_BACKUP="$TMP/theme-backup-without-desktop.json"
 "$NODE" "$ROOT/scripts/theme-config.mjs" restore "$NO_DESKTOP_CONFIG" "$NO_DESKTOP_BACKUP" >/dev/null
 /usr/bin/cmp -s "$NO_DESKTOP_CONFIG" "$TMP/original-without-desktop.toml"
 
-/usr/bin/env -u HOME /bin/bash -c '. "$1/scripts/common-macos.sh"; [ -n "$HOME" ] && [ "$SKIN_VERSION" = "1.4.1-hazel.1" ]' _ "$ROOT"
+/usr/bin/env -u HOME /bin/bash -c '. "$1/scripts/common-macos.sh"; [ -n "$HOME" ] && [ "$SKIN_VERSION" = "1.4.2-hazel.1" ]' _ "$ROOT"
 if [ "$WITH_HOST_DOCTOR" = "true" ]; then
   "$ROOT/scripts/doctor-macos.sh" >/dev/null
   printf 'PASS: portable checks plus host Codex signature and doctor checks.\n'

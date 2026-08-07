@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.2-hazel.1 — 2026-08-06
+
+- Stop the render pass throwing once the quote moved into the hero. 1.4.1 still reached for that node through the chrome overlay, so every pass died on a null before the route-state toggle ran — leaving the brand and status stuck on over thread pages, where they landed on the conversation title and the share button. The text lookups now fall back to the document and tolerate a missing node.
+
 ## 1.4.1-hazel.1 — 2026-08-06
 
 - Anchor the corner quote inside the hero frame. It was positioned against the whole content column — 56% across it, 82px down from its top — so it drifted within the frame whenever the column's width or the hero's height changed. The renderer now parks the node in the hero itself, leaving the bubble's styling untouched.
