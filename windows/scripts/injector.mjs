@@ -41,6 +41,7 @@ const stableTestidLiteral = (testid) => {
 };
 const SKIN_VERSION = "1.5.11";
 const MAX_ART_BYTES = 10 * 1024 * 1024;
+const MAX_STICKER_BYTES = 4 * 1024 * 1024;
 const MAX_SAFE_CSS_BYTES = 256 * 1024;
 const STRONG_THEME_AUDIT_MS = 30000;
 const MIN_RENDERER_VIEWPORT_WIDTH = 320;
@@ -643,10 +644,47 @@ export async function loadTheme(themeDir) {
     throw new Error("Theme image metadata is invalid or exceeds the 16384px / 50MP safety limit");
   }
   theme.artMetadata = artMetadata;
+  // Decorative hero sticker: same containment and decode checks as the main
+  // image. A declared-but-missing file degrades to no sticker; an invalid
+  // existing file throws, because that is a configuration error.
+  let stickerBytes = null;
+  const stickerName = typeof raw.sticker === "string" && raw.sticker && !path.isAbsolute(raw.sticker)
+    ? raw.sticker : null;
+  if (stickerName) {
+    const stickerExtension = path.extname(stickerName).toLowerCase();
+    if (![".png", ".jpg", ".jpeg", ".webp"].includes(stickerExtension)) {
+      throw new Error(`Unsupported theme sticker format: ${stickerExtension || "missing"}`);
+    }
+    let realStickerPath = null;
+    try {
+      realStickerPath = await fs.realpath(path.resolve(realThemeDir, stickerName));
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+    if (realStickerPath) {
+      const relativeSticker = path.relative(realThemeDir, realStickerPath);
+      if (!relativeSticker || relativeSticker.startsWith("..") || path.isAbsolute(relativeSticker)) {
+        throw new Error("Theme sticker cannot escape through a link or junction");
+      }
+      const stickerStat = await fs.stat(realStickerPath);
+      if (!stickerStat.isFile() || stickerStat.size < 1 || stickerStat.size > MAX_STICKER_BYTES) {
+        throw new Error(`Theme sticker must be a non-empty file no larger than ${MAX_STICKER_BYTES} bytes`);
+      }
+      stickerBytes = await fs.readFile(realStickerPath);
+      if (!readImageMetadata(stickerBytes, stickerExtension)) {
+        throw new Error("Theme sticker metadata is invalid or exceeds the decode safety limit");
+      }
+      const stickerMime = stickerExtension === ".jpg" || stickerExtension === ".jpeg"
+        ? "image/jpeg" : stickerExtension === ".webp" ? "image/webp" : "image/png";
+      theme.stickerDataUrl = `data:${stickerMime};base64,${stickerBytes.toString("base64")}`;
+    }
+  }
   const fingerprint = createHash("sha256")
     .update(themeText, "utf8")
     .update("\0")
     .update(imageBytes)
+    .update("\0")
+    .update(stickerBytes ?? "")
     .update("\0")
     .update(safeCss?.source ?? "")
     .digest("hex");

@@ -1699,7 +1699,9 @@ html[data-dream-skin="active"] :is(main:is(.main-surface, [data-app-shell-main-s
   content: var(--dream-skin-quote, "MAKE SOMETHING WONDERFUL");
   position: absolute;
   right: 34px;
-  bottom: 26px;
+  /* 26.803 parks the composer flush with the bottom edge, so a 26px quote
+     lands on the model picker. 170px clears the home composer block. */
+  bottom: 170px;
   z-index: 2;
   pointer-events: none;
   max-width: 46%;
@@ -1760,35 +1762,27 @@ html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]):has(
   gap: 10px !important;
 }
 
-html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]):has(.group\/home-suggestions) [data-feature="game-source"] {
-  min-height: 276px !important;
-  flex: 0 0 276px !important;
-  align-items: flex-start !important;
-  justify-content: center !important;
-  padding-bottom: 0 !important;
-}
-
-html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]):not(:has(.group\/home-suggestions)) [data-feature="game-source"] {
-  min-height: 452px !important;
-  flex: 0 0 452px !important;
-  align-items: flex-start !important;
-  padding-bottom: 0 !important;
-}
+/* In the fork, 276px/452px sized the outer hero *zone* (card plus the
+   suggestion row hanging under it). Codex 26.803 removed the suggestion row
+   and the port collapsed the zone onto the card itself, which blew the card
+   up into mostly-empty space. The card is its own size now; no zone rules. */
 
 html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"] {
   position: relative !important;
   isolation: isolate;
   width: calc(100% - 36px) !important;
   max-width: none !important;
-  height: 270px !important;
-  min-height: 270px !important;
+  height: 300px !important;
+  min-height: 300px !important;
   flex: 0 1 auto !important;
   padding: 0 !important;
   overflow: visible !important;
   border: 1px solid color-mix(in srgb, var(--ds-accent) 46%, transparent) !important;
   border-radius: 26px !important;
   background-color: var(--ds-panel-2) !important;
+  /* Layer order: sticker on top so the scrim gradients cannot wash it out. */
   background-image:
+    var(--dream-skin-sticker, none),
     linear-gradient(90deg,
       color-mix(in srgb, var(--ds-panel-2) 98%, white) 0%,
       color-mix(in srgb, var(--ds-panel-2) 94%, transparent) 52%,
@@ -1797,8 +1791,8 @@ html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [dat
     radial-gradient(circle at 78% 30%, color-mix(in srgb, var(--ds-accent-alt) 22%, transparent), transparent 32%),
     var(--dream-skin-art) !important;
   background-repeat: no-repeat !important;
-  background-size: 100% 100%, 100% 100%, auto 138% !important;
-  background-position: center, center, var(--dream-skin-image-position) center !important;
+  background-size: 64px 58px, 100% 100%, 100% 100%, auto 138% !important;
+  background-position: left 38px bottom 24px, center, center, var(--dream-skin-image-position) center !important;
   box-shadow: 0 16px 40px color-mix(in srgb, var(--ds-text) 13%, transparent), inset 0 0 0 3px color-mix(in srgb, var(--ds-secondary) 20%, transparent) !important;
 }
 
@@ -1806,38 +1800,17 @@ html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]):not(
   width: calc(100% - 44px) !important;
 }
 
-html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"]::before {
-  content: "";
-  position: absolute;
-  /* Negative, not 0. In the class-based fork this scrim hung off a separate
-     hero-frame node and the title lived in a descendant, so paint order put
-     the text on top for free. Here both land on game-source, and a positioned
-     z-index:0 pseudo-element paints *after* its host's inline content — the
-     scrim greyed out "我们该构建什么？". The host sets isolation:isolate, so a
-     negative index stays inside this card: above its background (the artwork)
-     and below the title. */
-  z-index: -1;
-  inset: 0 auto 0 0;
-  width: 62%;
-  pointer-events: none;
-  border-radius: 25px 0 0 25px;
-  background:
-    linear-gradient(90deg, color-mix(in srgb, var(--ds-panel-2) 96%, white), color-mix(in srgb, var(--ds-panel-2) 84%, transparent) 72%, transparent),
-    repeating-linear-gradient(135deg, transparent 0 14px, color-mix(in srgb, var(--ds-secondary) 14%, transparent) 14px 15px);
-}
-
-html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"]::after {
-  content: none;
-  display: none;
-}
-
+/* The fork's separate scrim pseudo-element is gone: it shared ::before with
+   the brand line after the node collapse, which dragged the brand into an
+   absolutely-positioned strip. The card's first two background layers already
+   carry the readability scrim, so ::before/::after stay plain flow content. */
 html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"] {
   position: relative;
   z-index: 3;
   box-sizing: border-box;
   height: 100%;
   min-height: 0 !important;
-  padding: 34px 0 0 38px !important;
+  padding: 40px 0 0 38px !important;
   align-items: flex-start !important;
   justify-content: flex-start !important;
 }
@@ -1873,12 +1846,26 @@ html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [dat
 }
 
 html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"]::after {
-  content: var(--dream-skin-hero-subtitle, "灰泽满究竟爱不爱绿冻？早就说过很爱了");
+  /* Subtitle plus the sticker caption (cornerQuotes[1]); "\A" needs pre-line
+     to break. An empty caption leaves one blank line, which the card absorbs. */
+  content: var(--dream-skin-hero-subtitle, "灰泽满究竟爱不爱绿冻？早就说过很爱了") "\A" var(--dream-skin-hero-caption, "");
+  white-space: pre-line;
   display: block;
+  max-width: 56%;
   margin-top: 14px;
   color: var(--ds-muted);
   font: 600 13px/1.55 "Kaiti SC", "STKaiti", "PingFang SC", sans-serif;
   letter-spacing: .03em;
+}
+
+/* Native home banners (rate-limit notices and the like) ship an opaque
+   token-input backdrop that reads as a grey slab over the themed home. Swap
+   the backdrop layer for the skin's glass; content and controls stay native. */
+html[data-dream-skin="active"] .home-banners [class~="bg-token-input-background"] {
+  background: color-mix(in srgb, var(--ds-panel) 78%, transparent) !important;
+  border: 1px solid var(--ds-line) !important;
+  border-radius: 14px !important;
+  backdrop-filter: blur(14px) saturate(110%) !important;
 }
 
 html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"] button {
@@ -2133,7 +2120,9 @@ html[data-dream-skin="active"] [data-message-author-role] { border-radius: 18px;
 html[data-dream-skin="active"][data-dream-shell="dark"] body::before { opacity: .24; }
 
 html[data-dream-skin="active"][data-dream-shell="dark"] [role="main"] [data-feature="game-source"] {
+  /* Same four layers as the light card so the size/position lists line up. */
   background-image:
+    var(--dream-skin-sticker, none),
     linear-gradient(90deg,
       color-mix(in srgb, var(--ds-panel-2) 98%, black) 0%,
       color-mix(in srgb, var(--ds-panel-2) 92%, transparent) 54%,
@@ -2141,12 +2130,6 @@ html[data-dream-skin="active"][data-dream-shell="dark"] [role="main"] [data-feat
       transparent 100%),
     radial-gradient(circle at 78% 30%, color-mix(in srgb, var(--ds-accent-alt) 18%, transparent), transparent 32%),
     var(--dream-skin-art) !important;
-}
-
-html[data-dream-skin="active"][data-dream-shell="dark"] [role="main"] [data-feature="game-source"]::before {
-  background:
-    linear-gradient(90deg, color-mix(in srgb, var(--ds-panel-2) 97%, black), color-mix(in srgb, var(--ds-panel-2) 82%, transparent) 72%, transparent),
-    repeating-linear-gradient(135deg, transparent 0 14px, color-mix(in srgb, var(--ds-secondary) 8%, transparent) 14px 15px);
 }
 
 html[data-dream-skin="active"][data-dream-shell="dark"] :is(main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"]), [data-ds-part="main"]):not(:has([role="main"])) {
@@ -2167,6 +2150,12 @@ html[data-dream-skin="active"][data-dream-shell="dark"] :is(main:is(.main-surfac
 @media (max-width: 1120px) {
   html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) { --thread-content-max-width: min(870px, calc(100cqw - 30px)) !important; }
   html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"] { width: calc(100% - 28px) !important; }
+}
+
+/* The fork hid the subtitle at 1120px because its wide hero text collided
+   with the artwork. The 26.803 card is narrower and the subtitle wraps inside
+   its own 56% column, so it only has to yield on genuinely small windows. */
+@media (max-width: 960px) {
   html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"]::after { display: none; }
   /* Upstream drops its corner quote below this width because the composer and
      the project picker already crowd the bottom of the main surface. Hazel's
@@ -2177,9 +2166,7 @@ html[data-dream-skin="active"][data-dream-shell="dark"] :is(main:is(.main-surfac
 }
 
 @media (max-width: 900px) {
-  html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]):has(.group\/home-suggestions) [data-feature="game-source"] { min-height: 236px !important; flex-basis: 236px !important; }
-  html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]):not(:has(.group\/home-suggestions)) [data-feature="game-source"] { min-height: 410px !important; flex-basis: 410px !important; }
-  html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"] { height: 230px !important; min-height: 230px !important; background-size: 100% 100%, 100% 100%, auto 122% !important; }
+  html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"] { height: 230px !important; min-height: 230px !important; background-size: 64px 58px, 100% 100%, 100% 100%, auto 122% !important; }
   html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"] { padding: 26px 0 0 25px !important; }
   html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"] > * { width: 67% !important; }
   html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"] { font-size: 18px !important; }
@@ -2190,8 +2177,13 @@ html[data-dream-skin="active"][data-dream-shell="dark"] :is(main:is(.main-surfac
 
 @media (max-width: 720px) {
   html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"] {
+    /* Keep the layer count in step with the base rule's background-size list,
+       or the 64px sticker slot would size the gradient instead. */
     background-image:
+      var(--dream-skin-sticker, none),
       linear-gradient(120deg, color-mix(in srgb, var(--ds-panel-2) 97%, white), color-mix(in srgb, var(--ds-accent-alt) 18%, var(--ds-panel-2))) !important;
+    background-size: 64px 58px, 100% 100% !important;
+    background-position: left 25px bottom 20px, center !important;
   }
   html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"]::before { width: 100%; }
   html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"] > * { width: calc(100% - 28px) !important; }

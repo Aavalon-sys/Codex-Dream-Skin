@@ -47,6 +47,7 @@ const SKIN_VERSION = "1.5.11";
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
 const CDP_ID_PATTERN = /^[A-Za-z0-9._-]{1,200}$/;
 const MAX_ART_BYTES = 10 * 1024 * 1024;
+const MAX_STICKER_BYTES = 4 * 1024 * 1024;
 const MAX_SAFE_CSS_BYTES = 256 * 1024;
 const OPERATION_UI_HOST_ID = "chatgpt-dream-skin-operation";
 const OPERATION_UI_REGISTRY_KEY = "__CHATGPT_DREAM_SKIN_OPERATION_UI__";
@@ -703,6 +704,7 @@ export async function loadTheme(themeDir) {
     statusText: normalizeThemeText(raw.statusText, "DREAM SKIN ONLINE", 120, "statusText", configPath),
     quote: normalizeThemeText(raw.quote, "MAKE SOMETHING WONDERFUL", 120, "quote", configPath),
     image: raw.image,
+    ...(typeof raw.sticker === "string" && raw.sticker ? { sticker: raw.sticker } : {}),
     colorMode: rawColors ? "explicit" : "auto",
     explicitColorKeys: rawColors ? colorKeys.filter((key) => Object.hasOwn(rawColors, key)) : [],
     colors: {
@@ -803,6 +805,42 @@ export async function loadTheme(themeDir) {
     const art = await imageHandle.readFile();
     if (art.length < 1 || art.length > MAX_ART_BYTES) {
       throw new Error(`Theme image must be a non-empty file no larger than ${MAX_ART_BYTES} bytes`);
+    }
+    // Decorative hero sticker. A theme.json that names one but ships no file
+    // degrades to no sticker; an existing file that fails validation throws,
+    // because that is a configuration error worth surfacing.
+    if (theme.sticker) {
+      const stickerExtension = path.extname(theme.sticker).toLowerCase();
+      if (![".png", ".jpg", ".jpeg", ".webp"].includes(stickerExtension)) {
+        throw new Error(`Unsupported theme sticker format: ${stickerExtension || "missing"}`);
+      }
+      let stickerPath = null;
+      try {
+        stickerPath = await fs.realpath(path.join(assetsRoot, theme.sticker));
+      } catch (error) {
+        if (error.code !== "ENOENT") throw error;
+      }
+      if (stickerPath) {
+        assertContainedPath(assetsRoot, stickerPath, "Theme sticker");
+        const stickerHandle = await fs.open(
+          stickerPath, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0),
+        );
+        try {
+          const stickerStat = await stickerHandle.stat();
+          if (!stickerStat.isFile() || stickerStat.size < 1 || stickerStat.size > MAX_STICKER_BYTES) {
+            throw new Error(`Theme sticker must be a non-empty file no larger than ${MAX_STICKER_BYTES} bytes`);
+          }
+          const sticker = await stickerHandle.readFile();
+          if (!readImageMetadata(sticker, stickerExtension)) {
+            throw new Error("Theme sticker metadata is invalid or exceeds the decode safety limit");
+          }
+          const stickerMime = stickerExtension === ".jpg" || stickerExtension === ".jpeg"
+            ? "image/jpeg" : stickerExtension === ".webp" ? "image/webp" : "image/png";
+          theme.stickerDataUrl = `data:${stickerMime};base64,${sticker.toString("base64")}`;
+        } finally {
+          await stickerHandle.close();
+        }
+      }
     }
     const safeCss = await loadSafeCss(assetsRoot);
     return {

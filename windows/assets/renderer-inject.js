@@ -32,6 +32,8 @@
     "--dream-skin-name", "--dream-skin-tagline", "--dream-skin-project-prefix",
     "--dream-skin-project-label", "--dream-skin-brand-subtitle", "--dream-skin-status",
     "--dream-skin-quote", "--dream-skin-art",
+    "--dream-skin-hero-title", "--dream-skin-hero-subtitle", "--dream-skin-hero-caption",
+    "--dream-skin-image-position", "--dream-skin-pet-safe-height", "--dream-skin-sticker",
     "--ds-theme-color-background", "--ds-theme-color-panel",
     "--ds-theme-color-panel-alt", "--ds-theme-color-accent",
     "--ds-theme-color-accent-alt", "--ds-theme-color-secondary",
@@ -92,6 +94,19 @@
     const comma = artDataUrl.indexOf(",");
     const mime = /^data:([^;,]+)/.exec(artDataUrl)?.[1] || "image/png";
     const binary = atob(artDataUrl.slice(comma + 1));
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    return URL.createObjectURL(new Blob([bytes], { type: mime }));
+  })();
+  // The hero sticker rides inside the theme JSON rather than its own payload
+  // token; a theme without one simply leaves --dream-skin-sticker unset and
+  // the CSS layer falls back to `none`.
+  const stickerUrl = (() => {
+    const data = typeof THEME.stickerDataUrl === "string" ? THEME.stickerDataUrl : "";
+    if (!/^data:image\/(png|jpeg|webp);base64,/.test(data)) return null;
+    const comma = data.indexOf(",");
+    const mime = /^data:([^;,]+)/.exec(data)?.[1] || "image/png";
+    const binary = atob(data.slice(comma + 1));
     const bytes = new Uint8Array(binary.length);
     for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
     return URL.createObjectURL(new Blob([bytes], { type: mime }));
@@ -346,6 +361,8 @@
     ));
     setStyleProperty(root, "--dream-skin-image-position", THEME.imagePosition || "right");
     setStyleProperty(root, "--dream-skin-pet-safe-height", `${THEME.petSafeArea?.minHeight || 0}px`);
+    setStyleProperty(root, "--dream-skin-hero-caption", cssString(cornerQuotes[1] || ""));
+    if (stickerUrl) setStyleProperty(root, "--dream-skin-sticker", `url("${stickerUrl}")`);
   };
 
   const applyArtMetadata = (root) => {
