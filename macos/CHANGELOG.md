@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.1-hazel.1 — 2026-08-06
+
+- Anchor the corner quote inside the hero frame. It was positioned against the whole content column — 56% across it, 82px down from its top — so it drifted within the frame whenever the column's width or the hero's height changed. The renderer now parks the node in the hero itself, leaving the bubble's styling untouched.
+
 ## 1.4.0-hazel.1 — 2026-08-05
 
 - Restore the skin on Codex 26.727, which dropped the `main-surface` class from `<main>`: the renderer detection no longer requires it, and the stylesheet anchors to a `dream-skin-shell-main` marker applied to whichever content surface is resolved.

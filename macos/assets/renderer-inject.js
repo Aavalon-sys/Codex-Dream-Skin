@@ -294,6 +294,15 @@
     markOnly("dream-skin-home-composer-zone", composerZone);
 
     markOnly("dream-skin-home-hero", heroFrame);
+    // Park the corner quote inside the hero so it is positioned against that
+    // box. Left in the chrome overlay it resolves against the whole content
+    // column, and drifts away from the hero whenever the column's width or the
+    // hero's height changes.
+    const quoteNode = document.getElementById(CHROME_ID)?.querySelector(".dream-skin-quote")
+      ?? document.querySelector(".dream-skin-quote");
+    if (heroFrame && quoteNode && quoteNode.parentElement !== heroFrame) {
+      heroFrame.appendChild(quoteNode);
+    }
     markOnly("dream-skin-native-suggestions", nativeSuggestions);
     markOnly("dream-skin-native-suggestions-lane", suggestionsLane);
 

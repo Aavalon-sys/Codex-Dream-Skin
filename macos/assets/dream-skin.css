@@ -295,10 +295,12 @@ html.codex-dream-skin main.dream-skin-shell-main > header.app-header-tint {
 #codex-dream-skin-chrome.dream-skin-home-shell .dream-skin-status { display: flex; }
 
 .dream-skin-quote {
+  /* Anchored to the hero box the renderer parks it in, so it holds its spot
+     inside the frame instead of tracking the content column. */
   position: absolute;
   left: 56%;
   right: auto;
-  top: 82px;
+  top: 20px;
   display: none;
   max-width: 300px;
   padding: 5px 11px 6px;
@@ -327,7 +329,7 @@ html.codex-dream-skin main.dream-skin-shell-main > header.app-header-tint {
   background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--ds-panel) 65%, transparent));
 }
 
-#codex-dream-skin-chrome.dream-skin-home-shell .dream-skin-quote { display: block; }
+.dream-skin-home .dream-skin-home-hero .dream-skin-quote { display: block; }
 #codex-dream-skin-chrome.dream-skin-home-shell .dream-skin-footer-quote { display: none; }
 
 .dream-skin-particles {

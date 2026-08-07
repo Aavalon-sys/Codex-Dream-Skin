@@ -101,7 +101,12 @@ done
 /usr/bin/grep -F -q '.dream-skin-home.dream-skin-home-legacy' "$ROOT/assets/dream-skin.css"
 /usr/bin/grep -F -q 'overflow: visible !important' "$ROOT/assets/dream-skin.css"
 /usr/bin/grep -F -q '#codex-dream-skin-chrome.dream-skin-home-shell .dream-skin-footer-quote { display: none; }' "$ROOT/assets/dream-skin.css"
-/usr/bin/grep -F -q 'top: 82px;' "$ROOT/assets/dream-skin.css"
+# The quote is positioned against the hero frame, not the content column, so
+# what has to hold is that the renderer keeps parking the node inside the hero.
+# Pinning its old offset would only re-lock the drift this replaced.
+/usr/bin/grep -F -q 'heroFrame.appendChild(quoteNode)' "$ROOT/assets/renderer-inject.js"
+/usr/bin/grep -F -q '.dream-skin-home .dream-skin-home-hero .dream-skin-quote { display: block; }' \
+  "$ROOT/assets/dream-skin.css"
 /usr/bin/grep -F -q 'transform: translate(-50%, -50%) !important;' "$ROOT/assets/dream-skin.css"
 if /usr/bin/grep -F -q '.group\/home-suggestions button' "$ROOT/assets/dream-skin.css"; then
   printf 'Home-card styling leaked to secondary suggestion decks.\n' >&2
@@ -229,7 +234,7 @@ NO_DESKTOP_BACKUP="$TMP/theme-backup-without-desktop.json"
 "$NODE" "$ROOT/scripts/theme-config.mjs" restore "$NO_DESKTOP_CONFIG" "$NO_DESKTOP_BACKUP" >/dev/null
 /usr/bin/cmp -s "$NO_DESKTOP_CONFIG" "$TMP/original-without-desktop.toml"
 
-/usr/bin/env -u HOME /bin/bash -c '. "$1/scripts/common-macos.sh"; [ -n "$HOME" ] && [ "$SKIN_VERSION" = "1.4.0-hazel.1" ]' _ "$ROOT"
+/usr/bin/env -u HOME /bin/bash -c '. "$1/scripts/common-macos.sh"; [ -n "$HOME" ] && [ "$SKIN_VERSION" = "1.4.1-hazel.1" ]' _ "$ROOT"
 if [ "$WITH_HOST_DOCTOR" = "true" ]; then
   "$ROOT/scripts/doctor-macos.sh" >/dev/null
   printf 'PASS: portable checks plus host Codex signature and doctor checks.\n'
