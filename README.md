@@ -11,7 +11,7 @@
 
 ---
 
-## 长这样
+## 视觉效果如下：
 
 Codex 首页，深色与浅色跟随应用自动切换：
 
@@ -20,7 +20,7 @@ Codex 首页，深色与浅色跟随应用自动切换：
   <img src="docs/images/hazel/codex-home-light.png" width="49%" alt="Codex 首页 浅色">
 </div>
 
-切到 ChatGPT 那侧同样生效，聊天与工作模式都覆盖：
+切到 ChatGPT 侧同样生效，聊天与工作模式都覆盖：
 
 <div align="center">
   <img src="docs/images/hazel/chatgpt-chat-light.png" width="49%" alt="ChatGPT 聊天 浅色">
@@ -31,16 +31,11 @@ Codex 首页，深色与浅色跟随应用自动切换：
 
 ## 一键安装
 
-macOS，终端里跑这一行：
+macOS在终端运行：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Aavalon-sys/Codex-Dream-Skin/agent/public-hazel-release/install.sh | bash
 ```
-
-脚本会取最新发布包、校验 SHA-256、解压后调用安装器。装完重启一次 Codex 就能看到。
-
-> 走 `curl` 而不是浏览器下载是有意的：浏览器会给文件打上 `com.apple.quarantine`，
-> 解压后双击 `.command` 会被 Gatekeeper 拦成「未识别的开发者」。curl 不打这个标记。
 
 想保留当前已激活的主题（只换引擎、不换皮肤内容）：
 
@@ -48,7 +43,7 @@ curl -fsSL https://raw.githubusercontent.com/Aavalon-sys/Codex-Dream-Skin/agent/
 curl -fsSL https://raw.githubusercontent.com/Aavalon-sys/Codex-Dream-Skin/agent/public-hazel-release/install.sh | bash -s -- --keep-active-theme
 ```
 
-装好后，安装目录里有几个双击就能用的入口：
+装好后，安装目录里双击：
 
 | 入口 | 作用 |
 | --- | --- |
@@ -64,7 +59,7 @@ curl -fsSL https://raw.githubusercontent.com/Aavalon-sys/Codex-Dream-Skin/agent/
 **配色**取自角色本身：代表色 `#D3D3D3` 浅灰做基底，粉丝名「绿冻」对应的 `#5C968E` 作强调色，
 点缀色来自立绘上风纪袖章的樱桃红。深色与浅色两套色板独立调过，跟随 Codex 的外观设置自动切换。
 
-**文案**用的是她的名场面：
+**文案**：
 
 - 标题 —— 我们该构建什么？
 - 副标题 —— 灰泽满究竟爱不爱绿冻？早就说过很爱了
@@ -73,7 +68,7 @@ curl -fsSL https://raw.githubusercontent.com/Aavalon-sys/Codex-Dream-Skin/agent/
 
 这些都在 `macos/assets/theme.json` 里，改完重新应用即可，不用碰 CSS。
 
-**界面**上做了这些处理：圆角面板与侧边栏对称、面板圆角缺口填成统一底色、
+**界面**：圆角面板与侧边栏对称、面板圆角缺口填成统一底色、
 侧边栏收起时标题块自动避开红黄绿三键、折叠动画由单个 CSS 变量驱动以免掉帧。
 
 ---
@@ -85,7 +80,7 @@ curl -fsSL https://raw.githubusercontent.com/Aavalon-sys/Codex-Dream-Skin/agent/
 ```
 
 或直接双击安装目录里的 `Restore Codex Dream Skin.command`。
-它会还原 Codex 的原始外观设置，并停掉注入器。
+会还原 Codex 的原始外观设置，并停掉注入器。
 
 ---
 
@@ -113,3 +108,5 @@ curl -fsSL https://raw.githubusercontent.com/Aavalon-sys/Codex-Dream-Skin/agent/
 角色：**灰泽满 Hazel**（VirtuaReal 二十七期）·
 [B 站](https://space.bilibili.com/1298779265) ·
 [萌娘百科](https://zh.moegirl.org.cn/灰泽满)
+
+最后祝我们的灰泽满小朋友生日快乐！生日回直播顺利！
