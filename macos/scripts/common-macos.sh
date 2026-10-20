@@ -235,6 +235,35 @@ seed_bundled_presets() {
   done
 }
 
+# The fork's own theme ships in assets/ (theme.json plus the art and sticker it
+# names). Store it in the library like a preset so a fresh install can
+# activate it and the menu can switch back to it later. Prints its id.
+seed_bundled_theme() {
+  local src="$PROJECT_ROOT/assets"
+  [ -f "$src/theme.json" ] || return 0
+  local id
+  id="$("$NODE" -e '
+const fs = require("node:fs");
+let t = {};
+try { t = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); } catch {}
+const plain = (v) => typeof v === "string" && /^[A-Za-z0-9._-]{1,96}$/.test(v) && v !== "theme.json";
+if (!/^[A-Za-z0-9_-]{1,80}$/.test(String(t.id ?? "")) || !plain(t.image)) process.exit(1);
+process.stdout.write([t.id, t.image, plain(t.sticker) ? t.sticker : ""].join("\n"));
+' "$src/theme.json")" || return 0
+  local theme_id image sticker
+  { IFS= read -r theme_id; IFS= read -r image; IFS= read -r sticker; } <<< "$id"
+  [ -f "$src/$image" ] || return 0
+  local dest="$STATE_ROOT/themes/$theme_id"
+  /bin/rm -rf "$dest"
+  /bin/mkdir -p "$dest"
+  /bin/chmod 700 "$dest"
+  /bin/cp "$src/$image" "$dest/"
+  [ -z "$sticker" ] || [ ! -f "$src/$sticker" ] || /bin/cp "$src/$sticker" "$dest/"
+  /bin/cp "$src/theme.json" "$dest/theme.json"
+  /bin/chmod 600 "$dest"/* 2>/dev/null || true
+  printf '%s' "$theme_id"
+}
+
 discover_codex_app() {
   local candidate=""
   local identifier=""

@@ -499,13 +499,13 @@ jobs:
 
           | 平台 / Platform | 安装包 / Package | 安装说明 / Guide |
           | --- | --- | --- |
-          | macOS · Apple Silicon / Intel | [CodexDreamSkin-v${VERSION}.dmg](https://github.com/Fei-Away/Codex-Dream-Skin/releases/download/v${VERSION}/CodexDreamSkin-v${VERSION}.dmg) | [macOS](https://github.com/Fei-Away/Codex-Dream-Skin/blob/v${VERSION}/docs/install-macos.md) |
-          | Windows · x64 | [CodexDreamSkin-Setup-v${VERSION}.exe](https://github.com/Fei-Away/Codex-Dream-Skin/releases/download/v${VERSION}/CodexDreamSkin-Setup-v${VERSION}.exe) | [Windows](https://github.com/Fei-Away/Codex-Dream-Skin/blob/v${VERSION}/docs/install-windows.md) |
+          | macOS · Apple Silicon / Intel | [CodexDreamSkin-v${VERSION}.dmg](https://github.com/Aavalon-sys/Codex-Dream-Skin/releases/download/v${VERSION}/CodexDreamSkin-v${VERSION}.dmg) | [macOS](https://github.com/Aavalon-sys/Codex-Dream-Skin/blob/v${VERSION}/docs/install-macos.md) |
+          | Windows · x64 | [CodexDreamSkin-Setup-v${VERSION}.exe](https://github.com/Aavalon-sys/Codex-Dream-Skin/releases/download/v${VERSION}/CodexDreamSkin-Setup-v${VERSION}.exe) | [Windows](https://github.com/Aavalon-sys/Codex-Dream-Skin/blob/v${VERSION}/docs/install-windows.md) |
 
           安装包目前未签名，首次打开请按对应平台的图形化安装说明操作。
           Packages are currently unsigned; follow the platform guide for first-run steps.
 
-          [SHA256SUMS.txt](https://github.com/Fei-Away/Codex-Dream-Skin/releases/download/v${VERSION}/SHA256SUMS.txt) · [Source commit](https://github.com/Fei-Away/Codex-Dream-Skin/commit/${RELEASE_SHA})
+          [SHA256SUMS.txt](https://github.com/Aavalon-sys/Codex-Dream-Skin/releases/download/v${VERSION}/SHA256SUMS.txt) · [Source commit](https://github.com/Aavalon-sys/Codex-Dream-Skin/commit/${RELEASE_SHA})
           EOF
 
       - name: Stage, verify, and publish release
@@ -532,13 +532,13 @@ jobs:
               dist/CodexDreamSkin-Setup-v${VERSION}.exe \
               dist/SHA256SUMS.txt
             gh release edit "$TAG" --draft \
-              --title "Codex Dream Skin v${VERSION}" \
+              --title "灰泽满 Hazel · Codex Dream Skin v${VERSION}" \
               --notes-file release-notes.md
           else
             gh release create "$TAG" \
               --verify-tag \
               --draft \
-              --title "Codex Dream Skin v${VERSION}" \
+              --title "灰泽满 Hazel · Codex Dream Skin v${VERSION}" \
               --notes-file release-notes.md \
               dist/CodexDreamSkin-v${VERSION}.dmg \
               dist/CodexDreamSkin-Setup-v${VERSION}.exe \

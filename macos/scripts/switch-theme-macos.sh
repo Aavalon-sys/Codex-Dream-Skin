@@ -121,6 +121,12 @@ const value = JSON.parse(process.argv[1]);
 if (typeof value.image !== "string" || !value.image) process.exit(1);
 process.stdout.write(value.image);
 ' "$STAGE_RESULT")" || fail "Theme staging returned an invalid image identity."
+# Optional decorative sticker; "theme.json" stands in when there is none so the
+# prune below keeps a valid, already-excluded name.
+THEME_STICKER="$("$NODE" -e '
+const value = JSON.parse(process.argv[1]);
+process.stdout.write(typeof value.sticker === "string" && value.sticker ? value.sticker : "theme.json");
+' "$STAGE_RESULT")" || fail "Theme staging returned an invalid sticker identity."
 STAGED_CONTENT_FINGERPRINT="$("$NODE" -e '
 const value = JSON.parse(process.argv[1]);
 if (!/^[0-9a-f]{64}$/.test(value.contentFingerprint ?? "")) process.exit(1);
@@ -153,10 +159,10 @@ done
 /bin/mv -f "$stage/theme.json" "$THEME_DIR/theme.json"
 if [ -n "$SAFE_CSS_NAME" ]; then
   /usr/bin/find "$THEME_DIR" -maxdepth 1 -type f \
-    ! -name 'theme.json' ! -name "$THEME_IMAGE" ! -name 'theme.css' -delete
+    ! -name 'theme.json' ! -name "$THEME_IMAGE" ! -name "$THEME_STICKER" ! -name 'theme.css' -delete
 else
   /usr/bin/find "$THEME_DIR" -maxdepth 1 -type f \
-    ! -name 'theme.json' ! -name "$THEME_IMAGE" -delete
+    ! -name 'theme.json' ! -name "$THEME_IMAGE" ! -name "$THEME_STICKER" -delete
 fi
 /bin/rm -rf "$stage"
 stage=""

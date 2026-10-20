@@ -33,6 +33,15 @@ $publicPresetImagePath = Join-Path $publicPresetRoot 'background.jpg'
 $publicPresetThemePath = Join-Path $publicPresetRoot 'theme.json'
 $publicPresetImageSha256 = 'b76a7cbe2ff9d923846e931984d243a7ba1f25de8d190b5c6412c809c41aee42'
 $publicPresetThemeSha256 = '8316c6ad29e3b84806358ab4a730c7e063b261e379179b9608cf751c282d66a7'
+# The Hazel fork's own theme is what a fresh install activates; the reviewed
+# public preset still ships in presets\. The theme's art is pinned like the
+# preset's, while its theme.json is checked by shape so its copy can change.
+$forkThemeRoot = Join-Path (Join-Path $repositoryRoot 'macos') 'assets'
+$forkThemePath = Join-Path $forkThemeRoot 'theme.json'
+$forkThemeImagePath = Join-Path $forkThemeRoot 'hazel-hero.png'
+$forkThemeStickerPath = Join-Path $forkThemeRoot 'hazel-sticker.png'
+$forkThemeImageSha256 = 'dfa916fc7101ccc4092187f0144ba8df79fc38341535fa36d1696c997d6bfce0'
+$forkThemeStickerSha256 = 'cd5286023466c9b581b9ac226f20f2f366cbeef6b79fc5ce359fe6820c5865b6'
 
 function Read-ReleaseTextFile {
   param([Parameter(Mandatory = $true)][string]$Path)
@@ -303,6 +312,24 @@ $publicPresetThemeHash = (Get-FileHash -LiteralPath $publicPresetThemePath -Algo
 if ($publicPresetThemeHash -cne $publicPresetThemeSha256) {
   throw "The reviewed public preset metadata changed. Expected $publicPresetThemeSha256, found $publicPresetThemeHash."
 }
+$forkTheme = (Read-ReleaseTextFile -Path $forkThemePath) | ConvertFrom-Json
+if ("$($forkTheme.id)" -cne 'preset-hazel' -or
+  "$($forkTheme.image)" -cne 'hazel-hero.png' -or
+  "$($forkTheme.sticker)" -cne 'hazel-sticker.png') {
+  throw 'The Hazel release theme metadata is unexpected.'
+}
+foreach ($forkArt in @(
+  @{ Path = $forkThemeImagePath; Sha256 = $forkThemeImageSha256 },
+  @{ Path = $forkThemeStickerPath; Sha256 = $forkThemeStickerSha256 }
+)) {
+  if (-not (Test-Path -LiteralPath $forkArt.Path -PathType Leaf)) {
+    throw "The Hazel release theme art is missing: $($forkArt.Path)"
+  }
+  $forkArtHash = (Get-FileHash -LiteralPath $forkArt.Path -Algorithm SHA256).Hash.ToLowerInvariant()
+  if ($forkArtHash -cne $forkArt.Sha256) {
+    throw "The reviewed Hazel theme art changed. Expected $($forkArt.Sha256), found $forkArtHash."
+  }
+}
 $compiler = Resolve-IsccExecutable -RequestedPath $IsccPath
 
 if (-not $OutputDirectory) { $OutputDirectory = Join-Path $repositoryRoot 'release' }
@@ -358,10 +385,15 @@ try {
     -Destination (Join-Path $payloadRoot 'presets\preset-gothic-void-crusade')
   Copy-Item -LiteralPath $publicPresetImagePath `
     -Destination (Join-Path (Join-Path $payloadRoot 'assets') 'dream-reference.jpg') -Force
-  $publicPresetTheme.image = 'dream-reference.jpg'
+  # assets\dream-reference.jpg keeps the public preset image above, so every
+  # required-file list still holds; the default theme itself is Hazel's.
+  Copy-Item -LiteralPath $forkThemeImagePath `
+    -Destination (Join-Path (Join-Path $payloadRoot 'assets') 'hazel-hero.png') -Force
+  Copy-Item -LiteralPath $forkThemeStickerPath `
+    -Destination (Join-Path (Join-Path $payloadRoot 'assets') 'hazel-sticker.png') -Force
   [System.IO.File]::WriteAllText(
     (Join-Path (Join-Path $payloadRoot 'assets') 'theme.json'),
-    (($publicPresetTheme | ConvertTo-Json -Depth 8) + "`r`n"),
+    (Read-ReleaseTextFile -Path $forkThemePath),
     [System.Text.UTF8Encoding]::new($false)
   )
   [System.IO.File]::WriteAllText(
@@ -391,6 +423,8 @@ try {
   $expectedPayloadFiles = @(
     'VERSION',
     'assets\dream-reference.jpg',
+    'assets\hazel-hero.png',
+    'assets\hazel-sticker.png',
     'assets\dream-skin.css',
     'assets\renderer-inject.js',
     'assets\safe-css-policy.json',
@@ -431,10 +465,16 @@ try {
   $stagedPublicThemeHash = (Get-FileHash -LiteralPath $stagedPublicThemePath -Algorithm SHA256).Hash.ToLowerInvariant()
   $stagedPublicTheme = (Read-ReleaseTextFile `
     -Path (Join-Path (Join-Path $payloadRoot 'assets') 'theme.json')) | ConvertFrom-Json
+  $stagedForkImageHash = (Get-FileHash -LiteralPath (Join-Path (Join-Path $payloadRoot 'assets') 'hazel-hero.png') `
+    -Algorithm SHA256).Hash.ToLowerInvariant()
+  $stagedForkStickerHash = (Get-FileHash -LiteralPath (Join-Path (Join-Path $payloadRoot 'assets') 'hazel-sticker.png') `
+    -Algorithm SHA256).Hash.ToLowerInvariant()
   if ($stagedPublicImageHash -cne $publicPresetImageSha256 -or
     $stagedPublicThemeHash -cne $publicPresetThemeSha256 -or
-    "$($stagedPublicTheme.id)" -cne 'preset-gothic-void-crusade' -or
-    "$($stagedPublicTheme.image)" -cne 'dream-reference.jpg') {
+    $stagedForkImageHash -cne $forkThemeImageSha256 -or
+    $stagedForkStickerHash -cne $forkThemeStickerSha256 -or
+    "$($stagedPublicTheme.id)" -cne 'preset-hazel' -or
+    "$($stagedPublicTheme.image)" -cne 'hazel-hero.png') {
     throw 'Staged installer payload did not retain the reviewed public release theme.'
   }
 

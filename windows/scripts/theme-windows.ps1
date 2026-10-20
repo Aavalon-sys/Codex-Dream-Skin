@@ -483,6 +483,23 @@ function Initialize-DreamSkinThemeStore {
   if ($bundledPresetId -cnotmatch '^preset-[A-Za-z0-9_-]{1,72}$') {
     throw "Bundled theme id must be a safe preset id: $bundledPresetId"
   }
+  # A bundled theme may declare a decorative sticker beside its image (the
+  # Hazel theme does). It is seeded wherever the image goes; a theme without
+  # one, or with a missing file, still works and simply renders no sticker.
+  $assetSticker = $null
+  $assetStickerName = ''
+  if ($bundledTheme.Theme.PSObject.Properties['sticker']) {
+    $assetStickerName = "$($bundledTheme.Theme.sticker)"
+  }
+  if ($assetStickerName -cmatch '^[A-Za-z0-9._-]{1,96}$' -and
+    $assetStickerName -cne 'theme.json' -and $assetStickerName -cne $assetImageName) {
+    $candidateSticker = Join-Path $assetRoot $assetStickerName
+    Assert-DreamSkinNoReparseComponents -Path $candidateSticker
+    if (Test-Path -LiteralPath $candidateSticker -PathType Leaf) {
+      Assert-DreamSkinImageFile -Path $candidateSticker
+      $assetSticker = $candidateSticker
+    }
+  }
   $activeTheme = Join-Path $paths.Active 'theme.json'
   Assert-DreamSkinNoReparseComponents -Path $activeTheme
   if (-not (Test-Path -LiteralPath $activeTheme -PathType Leaf)) {
@@ -492,6 +509,12 @@ function Initialize-DreamSkinThemeStore {
     Copy-Item -LiteralPath $assetImage -Destination $activeImage -Force
     Assert-DreamSkinNoReparseComponents -Path $activeImage
     Assert-DreamSkinImageFile -Path $activeImage
+    if ($null -ne $assetSticker) {
+      $activeSticker = Join-Path $paths.Active $assetStickerName
+      Assert-DreamSkinNoReparseComponents -Path $activeSticker
+      Copy-Item -LiteralPath $assetSticker -Destination $activeSticker -Force
+      Assert-DreamSkinNoReparseComponents -Path $activeSticker
+    }
     $imageArchive = Join-Path $paths.Images $assetImageName
     Assert-DreamSkinNoReparseComponents -Path $imageArchive
     Copy-Item -LiteralPath $assetImage -Destination $imageArchive -Force
@@ -517,6 +540,12 @@ function Initialize-DreamSkinThemeStore {
   Copy-Item -LiteralPath $assetImage -Destination $presetImage -Force
   Assert-DreamSkinNoReparseComponents -Path $presetImage
   Assert-DreamSkinImageFile -Path $presetImage
+  if ($null -ne $assetSticker) {
+    $presetSticker = Join-Path $presetDirectory $assetStickerName
+    Assert-DreamSkinNoReparseComponents -Path $presetSticker
+    Copy-Item -LiteralPath $assetSticker -Destination $presetSticker -Force
+    Assert-DreamSkinNoReparseComponents -Path $presetSticker
+  }
   Assert-DreamSkinNoReparseComponents -Path $presetTheme
   Copy-Item -LiteralPath (Join-Path $assetRoot 'theme.json') -Destination $presetTheme -Force
   # Bundled Gothic Void Crusade (same pack as macOS presets/).
@@ -562,6 +591,12 @@ function Initialize-DreamSkinThemeStore {
         Copy-Item -LiteralPath $sourcePack.ImagePath -Destination $refreshedImage -Force
         Assert-DreamSkinNoReparseComponents -Path $refreshedImage
         Assert-DreamSkinImageFile -Path $refreshedImage
+        if ($refreshSource -ceq $assetRoot -and $null -ne $assetSticker) {
+          $refreshedSticker = Join-Path $paths.Active $assetStickerName
+          Assert-DreamSkinNoReparseComponents -Path $refreshedSticker
+          Copy-Item -LiteralPath $assetSticker -Destination $refreshedSticker -Force
+          Assert-DreamSkinNoReparseComponents -Path $refreshedSticker
+        }
         Copy-Item -LiteralPath $sourcePack.ThemePath -Destination $activeTheme -Force
       }
     }

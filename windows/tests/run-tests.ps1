@@ -1210,6 +1210,24 @@ try {
     throw 'Release-shaped payload could not stage its public Gothic preset into the managed engine.'
   }
 
+  # Hazel fork: the release default declares a sticker beside its image, and a
+  # fresh store must seed it into both the active theme and the saved preset.
+  $hazelFixtureRoot = Join-Path $temporaryRoot 'hazel-theme-fixture'
+  $hazelFixtureAssets = Join-Path $hazelFixtureRoot 'assets'
+  $hazelFixtureState = Join-Path $temporaryRoot 'hazel-theme-state'
+  $hazelSourceAssets = Join-Path $repositoryRoot 'macos\assets'
+  Copy-Item -LiteralPath $releaseFixtureRoot -Destination $hazelFixtureRoot -Recurse -Force
+  foreach ($hazelFile in @('theme.json', 'hazel-hero.png', 'hazel-sticker.png')) {
+    Copy-Item -LiteralPath (Join-Path $hazelSourceAssets $hazelFile) -Destination $hazelFixtureAssets -Force
+  }
+  $hazelThemePaths = Initialize-DreamSkinThemeStore -SkillRoot $hazelFixtureRoot -StateRoot $hazelFixtureState
+  $hazelActiveTheme = Read-DreamSkinTheme -ThemeDirectory $hazelThemePaths.Active
+  if ($hazelActiveTheme.Theme.id -cne 'preset-hazel' -or
+    -not (Test-Path -LiteralPath (Join-Path $hazelThemePaths.Active 'hazel-sticker.png') -PathType Leaf) -or
+    -not (Test-Path -LiteralPath (Join-Path $hazelThemePaths.Saved 'preset-hazel\hazel-sticker.png') -PathType Leaf)) {
+    throw 'Hazel bundled theme did not seed its sticker beside the image.'
+  }
+
   $savedTheme = Save-DreamSkinCurrentTheme -Name '已保存主题' -StateRoot $themeStateRoot
   if ($savedTheme.Theme.name -cne '已保存主题' -or @(Get-DreamSkinSavedThemes -StateRoot $themeStateRoot).Count -ne 3) {
     throw 'Saved theme creation or discovery failed.'

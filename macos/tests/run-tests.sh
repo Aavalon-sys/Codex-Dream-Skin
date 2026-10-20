@@ -102,7 +102,7 @@ UPDATE_JSON="$({
   const value = JSON.parse(process.argv[1]);
   if (value.currentVersion !== "v1.5.21" || value.latestVersion !== "v9.8.7") process.exit(1);
   if (!value.updateAvailable) process.exit(1);
-  if (value.releaseUrl !== "https://github.com/Fei-Away/Codex-Dream-Skin/releases/latest") process.exit(1);
+  if (value.releaseUrl !== "https://github.com/Aavalon-sys/Codex-Dream-Skin/releases/latest") process.exit(1);
 ' "$UPDATE_JSON"
 UPDATE_REDIRECT_JSON="$({
   CODEX_DREAM_SKIN_TEST_REDIRECT_HEADERS_FILE="$ROOT/tests/fixtures/latest-release.headers" \
@@ -112,7 +112,7 @@ UPDATE_REDIRECT_JSON="$({
   const value = JSON.parse(process.argv[1]);
   if (value.currentVersion !== "v1.5.21" || value.latestVersion !== "v9.8.7") process.exit(1);
   if (!value.updateAvailable) process.exit(1);
-  if (value.releaseUrl !== "https://github.com/Fei-Away/Codex-Dream-Skin/releases/latest") process.exit(1);
+  if (value.releaseUrl !== "https://github.com/Aavalon-sys/Codex-Dream-Skin/releases/latest") process.exit(1);
 ' "$UPDATE_REDIRECT_JSON"
 "$NODE" --test "$ROOT/tests/update-fallback.test.mjs"
 if /usr/bin/grep -R -n -E --exclude-dir='.build' \
@@ -311,7 +311,7 @@ STANDALONE_DOCS="$TMP/standalone-source-docs"
   "$STANDALONE_ROOT/docs/reference-background-prompt-guide.md"
 /usr/bin/grep -F -q 'assets/portal-hero.png' \
   "$STANDALONE_ROOT/docs/reference-background-prompt-guide.md"
-/usr/bin/grep -F -q 'https://github.com/Fei-Away/Codex-Dream-Skin/blob/main/windows/assets/theme.json' \
+/usr/bin/grep -F -q 'https://github.com/Aavalon-sys/Codex-Dream-Skin/blob/main/windows/assets/theme.json' \
   "$STANDALONE_ROOT/docs/reference-background-prompt-guide.md"
 [ -f "$STANDALONE_ROOT/docs/images/hero-banner-red-white.png" ]
 [ ! -e "$STANDALONE_ROOT/docs/images/presets/arina-hashimoto-source.png" ]
@@ -333,7 +333,7 @@ STANDALONE_REPACK="$TMP/standalone-repack"
 "$STANDALONE_SOURCE/scripts/prepare-standalone-docs.sh" "$STANDALONE_REPACK"
 REPACK_GUIDE="$STANDALONE_REPACK/docs/reference-background-prompt-guide.md"
 /usr/bin/grep -F -q \
-  'https://github.com/Fei-Away/Codex-Dream-Skin/blob/main/windows/assets/theme.json' \
+  'https://github.com/Aavalon-sys/Codex-Dream-Skin/blob/main/windows/assets/theme.json' \
   "$REPACK_GUIDE"
 if /usr/bin/grep -E -q 'tree/main/windows/assets|blob/main/https://' "$REPACK_GUIDE"; then
   printf 'Standalone prompt URL rewriting is not idempotent.\n' >&2

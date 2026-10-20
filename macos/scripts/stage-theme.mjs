@@ -106,11 +106,28 @@ async function main() {
     throw new Error("Theme image contains control characters");
   }
 
+  // A theme may declare a decorative sticker beside its main image (Hazel
+  // does). It gets the image's name and containment checks, and it is
+  // optional: a declared-but-missing file stages without it, matching the
+  // injector, which then renders no sticker. Without this the publish step
+  // below deletes the sticker as a stray file on every theme switch.
+  let stickerName = null;
+  if (typeof theme.sticker === "string" && theme.sticker) {
+    if (path.basename(theme.sticker) !== theme.sticker
+      || theme.sticker === "theme.json" || theme.sticker === "theme.css" || theme.sticker === theme.image
+      || /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/u.test(theme.sticker)) {
+      throw new Error("Theme sticker must be a plain file name inside its theme directory");
+    }
+    stickerName = theme.sticker;
+  }
   const imagePath = path.resolve(sourceRoot, theme.image);
   assertContained(sourceRoot, imagePath, "Theme image");
-  const [image, safeCss] = await Promise.all([
+  const stickerPath = stickerName ? path.resolve(sourceRoot, stickerName) : null;
+  if (stickerPath) assertContained(sourceRoot, stickerPath, "Theme sticker");
+  const [image, safeCss, sticker] = await Promise.all([
     readStableFile(imagePath, "Theme image", MAX_IMAGE_BYTES),
     readOptionalStableFile(path.join(sourceRoot, "theme.css"), "Theme Safe CSS", MAX_CSS_BYTES),
+    stickerPath ? readOptionalStableFile(stickerPath, "Theme sticker", MAX_IMAGE_BYTES) : null,
   ]);
   if (image.bytes.length < 1) throw new Error("Theme image is empty");
   if (safeCss) decodeAndValidateSafeCss(safeCss.bytes);
@@ -126,9 +143,11 @@ async function main() {
   // observes a complete pair; subsequent source edits cannot race the copy.
   await writeExclusive(path.join(stageRoot, theme.image), image.bytes);
   if (safeCss) await writeExclusive(path.join(stageRoot, "theme.css"), safeCss.bytes);
+  if (sticker?.bytes.length) await writeExclusive(path.join(stageRoot, stickerName), sticker.bytes);
   await writeExclusive(path.join(stageRoot, "theme.json"), config.bytes);
   process.stdout.write(JSON.stringify({
     image: theme.image,
+    sticker: sticker?.bytes.length ? stickerName : null,
     contentFingerprint: runtimeThemeContentFingerprint(theme, image.bytes, safeCss?.bytes ?? null),
   }));
 }

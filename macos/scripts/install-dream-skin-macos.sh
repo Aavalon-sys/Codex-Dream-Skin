@@ -92,8 +92,11 @@ require_macos_runtime
 ensure_state_root
 codex_is_running && fail "Close Codex before installation so config.toml cannot be rewritten while the app is saving it."
 seed_bundled_presets
+BUNDLED_THEME_ID="$(seed_bundled_theme)"
 if [ ! -f "$THEME_DIR/theme.json" ]; then
-  "$SCRIPT_DIR/switch-theme-macos.sh" --id preset-gothic-void-crusade --no-apply >/dev/null
+  # A fresh install opens on the fork's own theme; the public preset stays in
+  # the library. Fall back to it if the bundled theme could not be seeded.
+  "$SCRIPT_DIR/switch-theme-macos.sh" --id "${BUNDLED_THEME_ID:-preset-gothic-void-crusade}" --no-apply >/dev/null
 else
   # Re-stage official presets so metadata upgrades (e.g. the #183 appearance
   # pin) reach an active copy staged by an older engine.
