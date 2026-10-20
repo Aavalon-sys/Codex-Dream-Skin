@@ -121,7 +121,10 @@ const sourceCss = await fs.readFile(path.join(projectRoot, "runtime", "dream-ski
 // byte-for-byte so its own regressions keep asserting against it, and this
 // layer is appended after it so later merges only ever touch their file. It
 // joins both platforms' CSS before compileRuntime, so its :has() predicates
-// land in the same build-time cache as upstream's.
+// land in the same build-time cache as upstream's. On Windows it is appended
+// before the Windows adapters run and before windows-shell.css, exactly as
+// the Windows suite expects (mac CSS + Home guard + shell CSS last): the
+// overlay copies some upstream selectors verbatim and must get the same guard.
 const sourceHazelCss = await fs.readFile(
   path.join(projectRoot, "runtime", "dream-skin-hazel.css"),
   "utf8",
@@ -129,7 +132,7 @@ const sourceHazelCss = await fs.readFile(
 const hazelCss = compileSelectorTokens(sourceHazelCss, "runtime/dream-skin-hazel.css");
 const expandedCss = `${compileSelectorTokens(sourceCss, "runtime/dream-skin.css")}\n${hazelCss}`;
 const windowsShellCss = await fs.readFile(path.join(toolsRoot, "windows-shell.css"), "utf8");
-const windowsCss = compileSelectorTokens(adaptWindowsReducedMotionCss(adaptWindowsHomeCss(sourceCss)), "runtime/dream-skin.css (Windows)") + windowsShellCss + `\n${hazelCss}`;
+const windowsCss = compileSelectorTokens(adaptWindowsReducedMotionCss(adaptWindowsHomeCss(`${sourceCss}\n${sourceHazelCss}`)), "runtime/dream-skin.css (Windows)") + windowsShellCss;
 const sourceRuntime = await fs.readFile(path.join(projectRoot, "runtime", "renderer-inject.js"), "utf8");
 const sourceThemePackageValidator = await fs.readFile(
   path.join(projectRoot, "runtime", "theme-package-validator.mjs"),
