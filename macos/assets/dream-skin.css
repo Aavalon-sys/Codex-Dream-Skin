@@ -1920,8 +1920,21 @@ html[data-dream-skin="active"] aside.app-shell-left-panel {
   border: 1px solid var(--ds-line) !important;
   border-left: 0 !important;
   border-radius: 0 20px 20px 0 !important;
-  box-shadow: 10px 0 30px color-mix(in srgb, var(--ds-text) 8%, transparent) !important;
+  /* No drop shadow. It suited the older layout, where a gap separated the two
+     panels and the glow fell into it; from 26.1013 the panels touch, so the
+     same light glow spreads ~30px into the content as a pale band. */
+  box-shadow: none !important;
   backdrop-filter: blur(18px) saturate(108%) !important;
+}
+
+/* Codex's native sidebar resize chrome is the sidebar's ::after: a 20px strip
+   that inherits the sidebar background and reaches into the main surface.
+   The notch tiles used to repaint this pseudo-element and hid it by accident;
+   cleared explicitly it keeps its drag handle but no longer paints a lighter
+   band down the content's left edge. Upstream clears it the same way in its
+   immersive modes. */
+html[data-dream-skin="active"] [data-ds-part="sidebar"]::after {
+  background: transparent !important;
 }
 
 /* No notch tiles. Up to 26.803 the four cut-outs beside the rounded panels
@@ -1989,12 +2002,25 @@ html[data-dream-skin="active"] :is(main:is(.main-surface, [data-app-shell-main-s
   border-right: 0 !important;
   border-bottom: 0 !important;
   border-radius: 20px 0 0 20px !important;
-  box-shadow: inset 0 1px color-mix(in srgb, white 70%, transparent), -9px 0 28px color-mix(in srgb, var(--ds-text) 7%, transparent) !important;
+  /* Inset highlight only. The old -9px outward glow sat under the sidebar,
+     except in the V between the two rounded corners, which it lit ~6 levels
+     brighter than the title bar it should continue. */
+  box-shadow: inset 0 1px color-mix(in srgb, white 70%, transparent) !important;
   overflow: hidden !important;
 }
 
-html[data-dream-skin="active"] :is(main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"]), [data-ds-part="main"]):not(:has([role="main"])) {
+/* The ambient figure goes on every surface that has no hero card. Gating on
+   the home-route alias instead stopped working in 26.1013: every ChatGPT route
+   carries [role="main"], so chat, Work and the ChatGPT home all counted as
+   "home" and lost the figure, while only the Codex home has the card that
+   carries it. The gate is the Codex home icon rather than the hero part:
+   ChatGPT Work's heading is the same game-source component, so the renderer
+   tags it home-hero too, but Work has no home icon. The first layer fades her out from 60% down; the figure is
+   82% tall at 36%, so her cropped legs end at 88.5% and used to stop there
+   on a hard horizontal edge. */
+html[data-dream-skin="active"] :is(main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"]), [data-ds-part="main"]):not(:has([data-testid="home-icon"])) {
   background:
+    linear-gradient(180deg, transparent 0%, transparent 60%, var(--ds-bg) 88.5%),
     /* Opaque until the artwork actually starts. Fading --ds-bg over a --ds-bg
        base is a no-op visually, but the near-1 alphas still round to ±1 per
        band, which shows up as flat vertical stripes across the empty half. */
@@ -2145,7 +2171,9 @@ html[data-dream-skin="active"] :is(main:is(.main-surface, [data-app-shell-main-s
    (bottom: 170px on 26.803) only held while the card happened to sit there:
    26.1013 moved the card up and the quote was left floating over the
    suggestion list. Anchoring ties it to the card itself, and a route without
-   the card (ChatGPT's home) gets no quote rather than a stray one. */
+   the card (ChatGPT's home, Work) gets no quote rather than a stray one.
+   Work's heading is a game-source node as well and carries the anchor name,
+   so the gate is the Codex home icon, which only the card's route has. */
 html[data-dream-skin="active"] [data-ds-part="home-hero"] {
   anchor-name: --hazel-hero;
 }
@@ -2169,7 +2197,7 @@ html[data-dream-skin="active"] :is(main:is(.main-surface, [data-app-shell-main-s
   letter-spacing: .02em;
 }
 
-html[data-dream-skin="active"] :is(main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"]), [data-ds-part="main"]):has([role="main"]):has([data-ds-part="home-hero"])::after {
+html[data-dream-skin="active"] :is(main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"]), [data-ds-part="main"]):has([data-testid="home-icon"])::after {
   display: block;
 }
 
@@ -2635,7 +2663,7 @@ html[data-dream-skin="active"] [data-message-author-role] { border-radius: 18px;
 
 html[data-dream-skin="active"][data-dream-shell="dark"] body::before { opacity: .24; }
 
-html[data-dream-skin="active"][data-dream-shell="dark"] [role="main"] [data-feature="game-source"] {
+html[data-dream-skin="active"][data-dream-shell="dark"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"] {
   /* Same four layers as the light card so the size/position lists line up. */
   background-image:
     var(--dream-skin-sticker, none),
@@ -2648,8 +2676,9 @@ html[data-dream-skin="active"][data-dream-shell="dark"] [role="main"] [data-feat
     var(--dream-skin-art) !important;
 }
 
-html[data-dream-skin="active"][data-dream-shell="dark"] :is(main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"]), [data-ds-part="main"]):not(:has([role="main"])) {
+html[data-dream-skin="active"][data-dream-shell="dark"] :is(main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"]), [data-ds-part="main"]):not(:has([data-testid="home-icon"])) {
   background:
+    linear-gradient(180deg, transparent 0%, transparent 60%, var(--ds-bg) 88.5%),
     linear-gradient(90deg,
       var(--ds-bg) 0%,
       var(--ds-bg) 40%,
@@ -2704,7 +2733,7 @@ html[data-dream-skin="active"][data-dream-shell="dark"] :is(main:is(.main-surfac
   html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"]::before { width: 100%; }
   html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"] > * { width: calc(100% - 28px) !important; }
   html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]):has(.group\/home-suggestions) .group\/home-suggestions { font-size: 11px !important; }
-  html[data-dream-skin="active"] :is(main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"]), [data-ds-part="main"]):not(:has([role="main"])) { background: var(--ds-bg) !important; }
+  html[data-dream-skin="active"] :is(main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"]), [data-ds-part="main"]):not(:has([data-testid="home-icon"])) { background: var(--ds-bg) !important; }
 }
 
 @media (prefers-reduced-motion: reduce) {
