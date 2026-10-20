@@ -1998,6 +1998,15 @@ html[data-dream-skin="active"] aside.app-shell-left-panel {
   backdrop-filter: blur(18px) saturate(108%) !important;
 }
 
+/* The native page surface wrapping both panels draws a faint 12px-radius ring.
+   With the sidebar open its left edge hides under the 340px panel; collapsed
+   to the 52px rail it lands exactly on the content surface's left edge, and
+   the 12px ring beside the 20px border reads as two misaligned arcs at the
+   top-left and bottom-left corners. Hazel outlines both panels itself. */
+html[data-dream-skin="active"] [class*="_PageSurface_"] {
+  box-shadow: none !important;
+}
+
 /* Codex's native sidebar resize chrome is the sidebar's ::after: a 20px strip
    that inherits the sidebar background and reaches into the main surface.
    The notch tiles used to repaint this pseudo-element and hid it by accident;
@@ -2071,7 +2080,9 @@ html[data-dream-skin="active"] :is(main:is(.main-surface, [data-app-shell-main-s
     linear-gradient(180deg, color-mix(in srgb, var(--ds-bg) 94%, white), var(--ds-bg)) !important;
   border: 1px solid var(--ds-line) !important;
   border-right: 0 !important;
-  border-bottom: 0 !important;
+  /* A bottom edge too, so the bottom-left corner is a whole arc mirroring the
+     sidebar's bottom-right one. The content surface ends 4px above the
+     window, level with the sidebar, so the two outlines meet in a clean V. */
   border-radius: 20px 0 0 20px !important;
   /* Inset highlight only. The old -9px outward glow sat under the sidebar,
      except in the V between the two rounded corners, which it lit ~6 levels
