@@ -75,6 +75,11 @@ const STYLE_PROPERTIES = new Set([
   "border-bottom-style",
   "border-left-style",
 ]);
+const COMPOSER_BORDER_BRIDGE_PROPERTIES = new Set([
+  ...[...COLOR_PROPERTIES].filter((property) => property.startsWith("border-")),
+  ...WIDTH_PROPERTIES,
+  ...STYLE_PROPERTIES,
+]);
 const RADIUS_PROPERTIES = new Set([
   "border-radius",
   "border-top-left-radius",
@@ -521,6 +526,15 @@ function validationResult(parsed) {
 
 function compileRuntimeCss(parsed) {
   const compiledRules = [];
+  const composerBaseBorderProperties = new Set();
+  for (const { selector, declarations } of parsed.rules) {
+    if (selector.part !== "composer" || selector.state) continue;
+    for (const { property } of declarations) {
+      if (COMPOSER_BORDER_BRIDGE_PROPERTIES.has(property)) {
+        composerBaseBorderProperties.add(property);
+      }
+    }
+  }
   for (const { selector: selectorRecord, declarations } of parsed.rules) {
     const { part, selector } = selectorRecord;
     const runtimeDeclarations = [];
@@ -532,11 +546,28 @@ function compileRuntimeCss(parsed) {
       ) {
         runtimeDeclarations.push({ property: "background-image", value: "none" });
       }
+      if (
+        part === "composer"
+        && composerBaseBorderProperties.has(declaration.property)
+      ) {
+        runtimeDeclarations.push({
+          property: `--ds-community-composer-${declaration.property}`,
+          value: declaration.value,
+        });
+      }
     }
     const body = runtimeDeclarations
       .map(({ property, value }) => `    ${property}: ${value} !important;`)
       .join("\n");
     compiledRules.push(`  ${selector} {\n${body}\n  }`);
+
+    // The tagline is the hero's generated text. Keep its responsive defaults
+    // unless the author sets a validated size on the public home-hero part.
+    const taglineSize = part === "home-hero"
+      ? declarations.find(({ property }) => property === "font-size") : null;
+    if (taglineSize) {
+      compiledRules.push(`  ${selector}::after {\n    font-size: ${taglineSize.value} !important;\n  }`);
+    }
 
     if (part === "root") {
       const bodyDeclarations = [];

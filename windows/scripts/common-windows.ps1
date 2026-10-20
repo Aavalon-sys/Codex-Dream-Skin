@@ -1,5 +1,180 @@
 . (Join-Path $PSScriptRoot 'config-utf8.ps1')
 
+$script:DreamSkinStartResultCategories = @(
+  'none',
+  'cdp-launch-failed',
+  'cdp-direct-access-denied',
+  'cdp-endpoint-unavailable',
+  'port-unavailable',
+  'state-reconciliation-failed',
+  'injector-start-failed',
+  'renderer-verification-failed',
+  'superseded',
+  'internal-start-failure'
+)
+$script:DreamSkinStartAppearanceRecoveryStates = @(
+  'not-needed',
+  'retained',
+  'restored',
+  'conflict-preserved',
+  'blocked',
+  'preserved-rendered'
+)
+
+function New-DreamSkinStartException {
+  param(
+    [Parameter(Mandatory = $true)][string]$Category,
+    [Parameter(Mandatory = $true)][string]$Message,
+    [AllowNull()][System.Exception]$InnerException
+  )
+  if ($script:DreamSkinStartResultCategories -cnotcontains $Category -or $Category -ceq 'none') {
+    throw 'Invalid Dream Skin start failure category.'
+  }
+  $exception = if ($null -ne $InnerException) {
+    [System.InvalidOperationException]::new($Message, $InnerException)
+  } else {
+    [System.InvalidOperationException]::new($Message)
+  }
+  $exception.Data['DreamSkinStartCategory'] = $Category
+  return $exception
+}
+
+function Get-DreamSkinStartFailureCategory {
+  param(
+    [Parameter(Mandatory = $true)][System.Exception]$Exception,
+    [ValidateSet(
+      'cdp-launch-failed', 'cdp-direct-access-denied', 'cdp-endpoint-unavailable',
+      'port-unavailable', 'state-reconciliation-failed', 'injector-start-failed',
+      'renderer-verification-failed', 'superseded', 'internal-start-failure'
+    )]
+    [string]$FallbackCategory = 'internal-start-failure'
+  )
+  $current = $Exception
+  while ($null -ne $current) {
+    $category = "$($current.Data['DreamSkinStartCategory'])"
+    if ($script:DreamSkinStartResultCategories -ccontains $category -and $category -cne 'none') {
+      return $category
+    }
+    $current = $current.InnerException
+  }
+  return $FallbackCategory
+}
+
+function Get-DreamSkinStartResultPath {
+  param(
+    [Parameter(Mandatory = $true)][string]$StateRoot,
+    [Parameter(Mandatory = $true)][string]$Token
+  )
+  if ($Token -cnotmatch '\A[a-f0-9]{32}\z') {
+    throw 'Dream Skin start result token is invalid.'
+  }
+  $root = [System.IO.Path]::GetFullPath($StateRoot)
+  return Join-Path $root ('.start-result-' + $Token + '.json')
+}
+
+function Write-DreamSkinStartResult {
+  param(
+    [Parameter(Mandatory = $true)][string]$StateRoot,
+    [Parameter(Mandatory = $true)][string]$Token,
+    [Parameter(Mandatory = $true)][ValidateSet('success', 'failure')][string]$Outcome,
+    [Parameter(Mandatory = $true)][string]$Category,
+    [Parameter(Mandatory = $true)][string]$AppearanceRecovery
+  )
+  if ($script:DreamSkinStartResultCategories -cnotcontains $Category -or
+    $script:DreamSkinStartAppearanceRecoveryStates -cnotcontains $AppearanceRecovery -or
+    ($Outcome -ceq 'success' -and $Category -cne 'none') -or
+    ($Outcome -ceq 'failure' -and $Category -ceq 'none')) {
+    throw 'Dream Skin start result fields are invalid.'
+  }
+  $path = Get-DreamSkinStartResultPath -StateRoot $StateRoot -Token $Token
+  [System.IO.Directory]::CreateDirectory([System.IO.Path]::GetFullPath($StateRoot)) | Out-Null
+  if (Get-Command Assert-DreamSkinNoReparseComponents -ErrorAction SilentlyContinue) {
+    Assert-DreamSkinNoReparseComponents -Path $path
+  }
+  $result = [ordered]@{
+    schemaVersion = 1
+    token = $Token
+    outcome = $Outcome
+    category = $Category
+    appearanceRecovery = $AppearanceRecovery
+  }
+  $content = (($result | ConvertTo-Json -Compress) + "`r`n")
+  if ($script:DreamSkinUtf8NoBom.GetByteCount($content) -gt 4096) {
+    throw 'Dream Skin start result exceeded its fixed size limit.'
+  }
+  Write-DreamSkinUtf8FileAtomically -Path $path -Content $content -ExpectedBytes $null
+}
+
+function Read-DreamSkinStartResult {
+  param(
+    [Parameter(Mandatory = $true)][string]$StateRoot,
+    [Parameter(Mandatory = $true)][string]$Token
+  )
+  $path = Get-DreamSkinStartResultPath -StateRoot $StateRoot -Token $Token
+  if (Get-Command Assert-DreamSkinNoReparseComponents -ErrorAction SilentlyContinue) {
+    Assert-DreamSkinNoReparseComponents -Path $path
+  }
+  if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+    throw 'Dream Skin start did not return a structured result.'
+  }
+  $stream = $null
+  try {
+    # Hold one non-writable, non-deletable handle from the size check through
+    # the read. This prevents a path swap or growth between two file opens.
+    $stream = [System.IO.FileStream]::new(
+      $path,
+      [System.IO.FileMode]::Open,
+      [System.IO.FileAccess]::Read,
+      [System.IO.FileShare]::Read
+    )
+    if ($stream.Length -le 0 -or $stream.Length -gt 4096) {
+      throw 'Dream Skin start returned an invalid structured result size.'
+    }
+    $bytes = [byte[]]::new([int]$stream.Length)
+    $offset = 0
+    while ($offset -lt $bytes.Length) {
+      $read = $stream.Read($bytes, $offset, $bytes.Length - $offset)
+      if ($read -le 0) {
+        throw 'Dream Skin start returned a truncated structured result.'
+      }
+      $offset += $read
+    }
+  } finally {
+    if ($null -ne $stream) { $stream.Dispose() }
+  }
+  $json = ConvertFrom-DreamSkinUtf8Bytes -Bytes $bytes -Path $path
+  try { $result = $json | ConvertFrom-Json -ErrorAction Stop } catch {
+    throw 'Dream Skin start returned invalid structured result JSON.'
+  }
+  if ($null -eq $result -or $result -is [string] -or $result -is [array]) {
+    throw 'Dream Skin start returned an invalid structured result object.'
+  }
+  $allowed = @('schemaVersion', 'token', 'outcome', 'category', 'appearanceRecovery')
+  $properties = @($result.PSObject.Properties)
+  if ($properties.Count -ne $allowed.Count) {
+    throw 'Dream Skin start returned an unexpected structured result shape.'
+  }
+  foreach ($property in $properties) {
+    if ($allowed -cnotcontains $property.Name) {
+      throw 'Dream Skin start returned an unexpected structured result field.'
+    }
+  }
+  if (($result.schemaVersion -isnot [int] -and $result.schemaVersion -isnot [long]) -or
+    [int64]$result.schemaVersion -ne 1 -or
+    $result.token -isnot [string] -or "$($result.token)" -cne $Token -or
+    $result.outcome -isnot [string] -or
+    @('success', 'failure') -cnotcontains "$($result.outcome)" -or
+    $result.category -isnot [string] -or
+    $script:DreamSkinStartResultCategories -cnotcontains "$($result.category)" -or
+    $result.appearanceRecovery -isnot [string] -or
+    $script:DreamSkinStartAppearanceRecoveryStates -cnotcontains "$($result.appearanceRecovery)" -or
+    ("$($result.outcome)" -ceq 'success' -and "$($result.category)" -cne 'none') -or
+    ("$($result.outcome)" -ceq 'failure' -and "$($result.category)" -ceq 'none')) {
+    throw 'Dream Skin start returned invalid structured result values.'
+  }
+  return $result
+}
+
 function Enter-DreamSkinOperationLock {
   param(
     [ValidateRange(0, 300000)]
@@ -41,6 +216,70 @@ function Test-DreamSkinPathEqual {
   } catch {
     return $false
   }
+}
+
+function Resolve-DreamSkinConfigPaths {
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $true)][string]$StateRoot,
+    [switch]$BindBackup,
+    [switch]$AllowMissingConfig
+  )
+
+  $defaultHome = Join-Path $HOME '.codex'
+  $configuredHome = [Environment]::GetEnvironmentVariable('CODEX_HOME', 'Process')
+  $codexHome = $defaultHome
+  if ($null -ne $configuredHome -and $configuredHome.Length -gt 0) {
+    # GetFullPath alone accepts drive-relative and rooted-on-current-drive paths.
+    if ($configuredHome -notmatch '^[A-Za-z]:[\\/]' -or
+      $configuredHome.Substring(2) -match '[:*?"<>|\x00-\x1f]') {
+      throw 'CODEX_HOME must be an absolute local directory path (for example D:\Codex Home).'
+    }
+    $codexHome = $configuredHome
+  }
+  $codexHome = [System.IO.Path]::GetFullPath($codexHome)
+  $configPath = Join-Path $codexHome 'config.toml'
+  Assert-DreamSkinNoReparseComponents -Path $configPath
+  if (-not (Test-Path -LiteralPath $codexHome -PathType Container) -or
+    ((Test-Path -LiteralPath $configPath) -and -not (Test-Path -LiteralPath $configPath -PathType Leaf)) -or
+    (-not $AllowMissingConfig -and -not (Test-Path -LiteralPath $configPath -PathType Leaf))) {
+    throw 'Codex config not found in the selected CODEX_HOME (or default .codex directory). Open official Codex with that home first.'
+  }
+  $backupPath = Join-Path $StateRoot 'config.before-dream-skin.toml'
+  $originPath = "$backupPath.origin.json"
+  $artifacts = @($backupPath, (Get-DreamSkinAppearanceMarkerPath -BackupPath $backupPath),
+    (Get-DreamSkinAppearanceTransactionPath -BackupPath $backupPath))
+  $hasBackupState = $false
+  foreach ($path in @($artifacts) + @($originPath)) {
+    Assert-DreamSkinNoReparseComponents -Path $path
+    if ((Test-Path -LiteralPath $path) -and -not (Test-Path -LiteralPath $path -PathType Leaf)) {
+      throw 'The Codex config backup state must contain ordinary files.'
+    }
+    if ($path -ne $originPath -and (Test-Path -LiteralPath $path)) { $hasBackupState = $true }
+  }
+  if ((Test-Path -LiteralPath $originPath) -and (Get-Item -LiteralPath $originPath).Length -gt 16384) {
+    throw 'Invalid Codex config backup origin.'
+  }
+  if ($hasBackupState) {
+    if (Test-Path -LiteralPath $originPath) {
+      try { $origin = (Read-DreamSkinUtf8File -Path $originPath) | ConvertFrom-Json -ErrorAction Stop } catch {
+        throw 'Invalid Codex config backup origin.'
+      }
+      if ($origin.version -ne 1 -or $origin.configPath -isnot [string] -or
+        -not (Test-DreamSkinPathEqual -Left $origin.configPath -Right $configPath)) {
+        throw 'The config backup belongs to a different CODEX_HOME. Restore using the original home before switching homes.'
+      }
+    } elseif (-not (Test-DreamSkinPathEqual -Left $configPath -Right (Join-Path $defaultHome 'config.toml'))) {
+      throw 'The legacy config backup belongs to the default .codex home. Restore that home before switching CODEX_HOME.'
+    }
+  }
+  if ($BindBackup -and (-not $hasBackupState -or -not (Test-Path -LiteralPath $originPath))) {
+    $null = Read-DreamSkinUtf8File -Path $configPath
+    $originBytes = if (Test-Path -LiteralPath $originPath) { [System.IO.File]::ReadAllBytes($originPath) } else { $null }
+    Write-DreamSkinUtf8FileAtomically -Path $originPath -ExpectedBytes $originBytes -Content (
+      [ordered]@{ version = 1; configPath = $configPath } | ConvertTo-Json -Compress)
+  }
+  return [pscustomobject]@{ Home = $codexHome; ConfigPath = $configPath; BackupPath = $backupPath }
 }
 
 function Test-DreamSkinPathWithin {
@@ -137,6 +376,49 @@ function Stop-DreamSkinTrayProcess {
   }
 }
 
+function Stop-DreamSkinThemeManagerProcess {
+  param([string]$StateRoot = (Join-Path $env:LOCALAPPDATA 'CodexDreamSkin'))
+
+  $engine = Get-DreamSkinRuntimeEnginePaths -StateRoot $StateRoot
+  $manager = Join-Path $engine.Root 'assets\theme-manager\DreamSkin.ThemeManager.exe'
+  # Never close by process name alone. Check the complete managed path before
+  # sending WM_CLOSE; the manager's FormClosing handler flushes pending settings.
+  Assert-DreamSkinNoReparseComponents -Path $manager
+  $processes = @(Get-Process -Name 'DreamSkin.ThemeManager' -ErrorAction SilentlyContinue)
+  try {
+    foreach ($process in $processes) {
+      if ($process.HasExited) { continue }
+      if (-not (Test-DreamSkinPathEqual -Left $process.Path -Right $manager)) {
+        throw 'A theme manager outside the installed runtime is running. Close it manually before continuing.'
+      }
+    }
+    foreach ($process in $processes) {
+      if ($process.HasExited) { continue }
+      if (-not $process.CloseMainWindow() -or -not $process.WaitForExit(5000)) {
+        throw 'The theme manager could not close normally. Close it manually and retry; the runtime was not replaced.'
+      }
+    }
+  } finally {
+    foreach ($process in $processes) { $process.Dispose() }
+  }
+}
+
+function Enter-DreamSkinThemeManagerMaintenance {
+  # Hold the same single-instance mutex through replacement, so a shortcut
+  # cannot reopen the old executable between the close and the atomic swap.
+  $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+  $mutex = [System.Threading.Mutex]::new($false, "Local\CodexDreamSkin.$sid.ThemeManager")
+  try {
+    $acquired = $false
+    try { $acquired = $mutex.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { $acquired = $true }
+    if (-not $acquired) { throw 'Close the DreamSkin theme manager before replacing the runtime.' }
+    return $mutex
+  } catch {
+    $mutex.Dispose()
+    throw
+  }
+}
+
 function Assert-DreamSkinRuntimeTree {
   param([Parameter(Mandatory = $true)][string]$Path)
   $root = [System.IO.Path]::GetFullPath($Path)
@@ -200,10 +482,12 @@ function Install-DreamSkinRuntimeEngine {
     'scripts\image-metadata.mjs',
     'scripts\injector.mjs',
     'scripts\install-dream-skin.ps1',
+    'scripts\localization-windows.ps1',
     'scripts\restore-dream-skin.ps1',
     'scripts\start-dream-skin.ps1',
     'scripts\theme-windows.ps1',
     'scripts\tray-dream-skin.ps1',
+    'assets\theme-manager\DreamSkin.ThemeManager.exe',
     'scripts\validate-safe-css-file.mjs',
     'scripts\verify-dream-skin.ps1'
   )
@@ -236,7 +520,9 @@ function Install-DreamSkinRuntimeEngine {
   $backupRoot = Join-Path $fullStateRoot ".engine-backup-$token"
   Ensure-DreamSkinManagedDirectory -Path $stagingRoot -Root $fullStateRoot
 
+  $managerMaintenance = $null
   try {
+    $managerMaintenance = Enter-DreamSkinThemeManagerMaintenance
     Copy-Item -LiteralPath (Join-Path $sourceRoot 'VERSION') -Destination $stagingRoot `
       -Force -ErrorAction Stop
     foreach ($directoryName in $sourceDirectories) {
@@ -315,6 +601,10 @@ function Install-DreamSkinRuntimeEngine {
     }
     return Get-DreamSkinRuntimeEnginePaths -StateRoot $fullStateRoot
   } finally {
+    if ($null -ne $managerMaintenance) {
+      $managerMaintenance.ReleaseMutex()
+      $managerMaintenance.Dispose()
+    }
     if (Test-Path -LiteralPath $stagingRoot) {
       try { Remove-DreamSkinRuntimeTree -Path $stagingRoot -StateRoot $fullStateRoot } catch {
         try {
@@ -401,21 +691,54 @@ function Invoke-DreamSkinNative {
   param(
     [Parameter(Mandatory = $true)][string]$FilePath,
     [string[]]$ArgumentList = @(),
-    [switch]$DiscardStderr
+    [switch]$DiscardStderr,
+    [switch]$SeparateStderr
   )
+  if ($DiscardStderr -and $SeparateStderr) {
+    throw 'Choose either discarded or separate native stderr.'
+  }
   $previousPreference = $ErrorActionPreference
   $ErrorActionPreference = 'Continue'
+  # PowerShell 7 callers may opt into native exit-code errors. This wrapper
+  # reports the actual exit code instead, without changing the caller's policy.
+  $PSNativeCommandUseErrorActionPreference = $false
+  $stderrPath = $null
   try {
-    if ($DiscardStderr) {
+    if ($SeparateStderr) {
+      # JSON consumers must not mix harmless startup warnings into stdout.
+      # Keep stderr separately so failed validators retain their diagnostics.
+      $stderrPath = [System.IO.Path]::GetTempFileName()
+      $nativeOutput = @(& $FilePath @ArgumentList 2>$stderrPath)
+    } elseif ($DiscardStderr) {
       $nativeOutput = @(& $FilePath @ArgumentList 2>$null)
     } else {
       $nativeOutput = @(& $FilePath @ArgumentList 2>&1)
     }
     $exitCode = $LASTEXITCODE
     $output = @($nativeOutput | ForEach-Object { "$_" })
-    return [pscustomobject]@{ Output = $output; ExitCode = $exitCode }
+    $errorOutput = @()
+    if ($stderrPath) {
+      # PS 5.1 redirects as UTF-16 with a BOM; PS 7 uses UTF-8.
+      $reader = [System.IO.StreamReader]::new($stderrPath, [System.Text.Encoding]::UTF8, $true)
+      try { $errorText = $reader.ReadToEnd() } finally { $reader.Dispose() }
+      $errorOutput = @($errorText -split '\r?\n' | Where-Object { $_.Length -gt 0 })
+    }
+    return [pscustomobject]@{ Output = $output; ErrorOutput = $errorOutput; ExitCode = $exitCode }
   } finally {
+    if ($stderrPath) { Remove-Item -LiteralPath $stderrPath -Force -ErrorAction SilentlyContinue }
     $ErrorActionPreference = $previousPreference
+  }
+}
+
+function ConvertFrom-DreamSkinUtf8Base64 {
+  param(
+    [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Value
+  )
+  try {
+    $bytes = [Convert]::FromBase64String($Value.Trim())
+    return ([System.Text.UTF8Encoding]::new($false, $true)).GetString($bytes)
+  } catch {
+    throw 'The native UTF-8 probe returned invalid data.'
   }
 }
 
@@ -470,10 +793,33 @@ function Get-DreamSkinValidatedNodeRuntime {
   $versionProbe = Invoke-DreamSkinNative -FilePath $candidate -ArgumentList @('-p', 'process.versions.node') -DiscardStderr
   $version = ($versionProbe.Output -join '').Trim()
   if ($versionProbe.ExitCode -ne 0 -or -not $version) { throw 'The Node.js runtime could not be validated.' }
-  $pathProbe = Invoke-DreamSkinNative -FilePath $candidate -ArgumentList @('-p', 'process.execPath') -DiscardStderr
-  $runtimePath = ($pathProbe.Output -join '').Trim()
-  if ($pathProbe.ExitCode -ne 0 -or -not $runtimePath -or -not (Test-Path -LiteralPath $runtimePath)) {
-    throw 'The Node.js executable path could not be validated.'
+  # Windows PowerShell 5.1 decodes redirected native stdout through the active
+  # console code page. Node writes UTF-8, so a non-ASCII temporary path can be
+  # corrupted before Test-Path sees it. Keep the transport ASCII-only and
+  # decode the original UTF-8 bytes explicitly; never fall back to the
+  # candidate when the identity probe is invalid.
+  $pathProbe = Invoke-DreamSkinNative -FilePath $candidate -ArgumentList @(
+    '-e', "process.stdout.write(Buffer.from(process.execPath, 'utf8').toString('base64'))"
+  ) -DiscardStderr
+  $encodedRuntimePath = ($pathProbe.Output -join '').Trim()
+  $runtimePath = ''
+  if ($pathProbe.ExitCode -eq 0 -and $encodedRuntimePath) {
+    try {
+      $runtimePath = ConvertFrom-DreamSkinUtf8Base64 -Value $encodedRuntimePath
+    } catch {
+      $runtimePath = ''
+    }
+  }
+  $runtimePathExists = $false
+  if ($runtimePath) {
+    try { $runtimePathExists = Test-Path -LiteralPath $runtimePath -PathType Leaf } catch {}
+  }
+  if ($pathProbe.ExitCode -ne 0 -or -not $runtimePath -or -not $runtimePathExists) {
+    $reason = 'path-not-found'
+    if ($pathProbe.ExitCode -ne 0) { $reason = 'probe-exit' }
+    elseif (-not $encodedRuntimePath) { $reason = 'empty-output' }
+    elseif (-not $runtimePath) { $reason = 'invalid-output' }
+    throw "The Node.js executable path could not be validated ($reason)."
   }
   $major = 0
   if (-not [int]::TryParse(($version -split '\.')[0], [ref]$major) -or $major -lt $MinimumMajor) {
@@ -729,16 +1075,23 @@ function Start-DreamSkinCodexForDebugging {
   try {
     Stop-DreamSkinCodex -Codex $Codex -PreserveProcessIds $preservedProcessIds -AllowForce
   } catch {
-    throw "Codex package activation did not retain the CDP arguments, and its process could not be closed safely: $($_.Exception.Message)"
+    throw (New-DreamSkinStartException -Category 'cdp-launch-failed' `
+      -Message 'Codex package activation did not retain the CDP arguments, and its process could not be closed safely.' `
+      -InnerException $_.Exception)
   }
 
   try {
     $directProcessId = Start-DreamSkinCodexDirect -Codex $Codex -Arguments $Arguments
   } catch {
     $failureKind = Get-DreamSkinDirectLaunchFailureKind -Exception $_.Exception
-    throw [System.InvalidOperationException]::new(
-      "Codex $($Codex.Version) converted the CDP argument into a codex:// navigation path. Direct launch of the validated Store executable failed ($failureKind), so this Codex/Windows combination cannot expose the Dream Skin debugging endpoint without modifying the protected app package.",
-      $_.Exception)
+    $category = if ($failureKind -ceq 'access-denied') {
+      'cdp-direct-access-denied'
+    } else {
+      'cdp-launch-failed'
+    }
+    throw (New-DreamSkinStartException -Category $category `
+      -Message "Codex $($Codex.Version) converted the CDP argument into a codex:// navigation path. Direct launch of the validated Store executable failed ($failureKind), so this Codex/Windows combination cannot expose the Dream Skin debugging endpoint without modifying the protected app package." `
+      -InnerException $_.Exception)
   }
 
   $directStatus = Wait-DreamSkinCodexDebugArgumentStatus -Codex $Codex -Port $Port
@@ -746,9 +1099,13 @@ function Start-DreamSkinCodexForDebugging {
     try {
       Stop-DreamSkinCodex -Codex $Codex -PreserveProcessIds $preservedProcessIds -AllowForce
     } catch {
-      throw "Direct Codex launch did not retain the CDP arguments and could not be closed safely: $($_.Exception.Message)"
+      throw (New-DreamSkinStartException -Category 'cdp-endpoint-unavailable' `
+        -Message 'Direct Codex launch did not retain the CDP arguments and could not be closed safely.' `
+        -InnerException $_.Exception)
     }
-    throw "Codex $($Codex.Version) did not retain the CDP argument during package activation or validated direct launch. Dream Skin cannot run without modifying the protected app package."
+    throw (New-DreamSkinStartException -Category 'cdp-endpoint-unavailable' `
+      -Message "Codex $($Codex.Version) did not retain the CDP argument during package activation or validated direct launch. Dream Skin cannot run without modifying the protected app package." `
+      -InnerException $null)
   }
 
   return [pscustomobject]@{

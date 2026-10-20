@@ -5,11 +5,17 @@ import vm from "node:vm";
 
 function styleDeclaration() {
   const values = new Map();
+  const priorities = new Map();
   return {
-    values,
+    priorities, values,
     getPropertyValue(name) { return values.get(name) || ""; },
-    setProperty(name, value) { values.set(name, String(value)); },
-    removeProperty(name) { values.delete(name); },
+    getPropertyPriority(name) { return priorities.get(name) || ""; },
+    setProperty(name, value, priority = "") {
+      values.set(name, String(value));
+      if (priority) priorities.set(name, String(priority));
+      else priorities.delete(name);
+    },
+    removeProperty(name) { values.delete(name); priorities.delete(name); },
     [Symbol.iterator]() { return values.keys(); },
   };
 }
@@ -30,7 +36,8 @@ function classList(initial) {
 function makeFixture({
   nativeAppearance = "dark", settings = false, settingsPanel = false, adopted = true,
   generic = false, genericComposer = true, genericHome = false, genericSearch = false,
-  modernMessages = false,
+  modernMessages = false, modernComposerLayout = false, cachedPages = false,
+  pathname = "/index.html", initialRoute = "",
 } = {}) {
   const attrs = new Map();
   const rootStyle = styleDeclaration();
@@ -51,12 +58,19 @@ function makeFixture({
     const node = {
       name,
       parentElement,
+      style: styleDeclaration(),
       get attributes() { return attributesFor(values); },
       getAttribute(attribute) { return values.get(attribute) ?? null; },
+      hasAttribute(attribute) { return values.has(attribute); },
       setAttribute(attribute, value) { values.set(attribute, String(value)); },
       removeAttribute(attribute) { values.delete(attribute); },
       appendChild(child) { child.parentElement = node; return child; },
-      matches(selector) { return selectorMatches.has(selector); },
+      matches(selector) {
+        if (selector === '[data-app-shell-active-page="false"]') {
+          return values.get("data-app-shell-active-page") === "false";
+        }
+        return selectorMatches.has(selector);
+      },
       closest(selector) {
         let current = node;
         while (current) {
@@ -72,6 +86,11 @@ function makeFixture({
           current = current.parentElement;
         }
         return false;
+      },
+      querySelector(selector) {
+        return [...domNodes].find((candidate) =>
+          candidate !== node && node.contains(candidate) && candidate.matches?.(selector),
+        ) || null;
       },
     };
     domNodes.add(node);
@@ -103,15 +122,22 @@ function makeFixture({
     const sidebarSelector = 'aside, nav[aria-label]';
     const composerSelector = '[data-testid*="composer" i], [data-testid*="prompt" i], ' +
       '[class*="composer" i], [class*="prompt" i]';
+    const composerLayoutRootSelector = '[class*="_ComposerLayoutRoot_"]';
     const overlaySelector = '[role="dialog"], [aria-modal="true"]';
     partFixtures.shell = makeDomNode("generic-shell", body);
     partFixtures.sidebar = makeDomNode("generic-sidebar", partFixtures.shell, new Map(), [sidebarSelector]);
     partFixtures.main = makeDomNode("generic-main", partFixtures.shell, new Map(), [mainSelector]);
     if (genericComposer) {
       partFixtures.composer = makeDomNode(
-        "generic-composer", partFixtures.main, new Map(), [composerSelector],
+        "generic-composer", partFixtures.main, new Map(),
+        [modernComposerLayout ? composerLayoutRootSelector : composerSelector],
       );
-      partFixtures.input = makeDomNode("generic-input", partFixtures.composer, new Map(), [inputSelector]);
+      const inputParent = modernComposerLayout
+        ? (partFixtures.composerFooter = makeDomNode(
+          "generic-composer-footer", partFixtures.composer, new Map(), [composerSelector],
+        ))
+        : partFixtures.composer;
+      partFixtures.input = makeDomNode("generic-input", inputParent, new Map(), [inputSelector]);
     }
     partFixtures.unrelatedAside = makeDomNode(
       "generic-content-aside", partFixtures.main, new Map(), [sidebarSelector],
@@ -148,8 +174,18 @@ function makeFixture({
     partFixtures.projectList = makeDomNode("project-list", partFixtures.home);
     partFixtures.thread = makeDomNode("thread", partFixtures.main);
     partFixtures.legacyMessage = makeDomNode("legacy-message", partFixtures.thread);
-    partFixtures.userMessage = makeDomNode("user-message", partFixtures.thread);
-    partFixtures.assistantMessage = makeDomNode("assistant-message", partFixtures.thread);
+    partFixtures.userMessage = makeDomNode(
+      "user-message", partFixtures.thread,
+      new Map([["data-local-conversation-user-anchor", "true"]]),
+    );
+    partFixtures.userMessageBubble = makeDomNode(
+      "user-message-bubble", partFixtures.userMessage, new Map(),
+      ['[class*="max-w-"][class*="rounded-2xl"][class*="text-start"]'],
+    );
+    partFixtures.assistantMessage = makeDomNode(
+      "assistant-message", partFixtures.thread,
+      new Map([["data-local-conversation-final-assistant", "true"]]),
+    );
     partFixtures.composer = makeDomNode("composer", partFixtures.main);
     partFixtures.composerToolbar = makeDomNode("composer-toolbar", partFixtures.composer);
     register("aside.app-shell-left-panel", partFixtures.sidebar);
@@ -168,8 +204,42 @@ function makeFixture({
       register(messageSelector, partFixtures.userMessage);
       register(messageSelector, partFixtures.assistantMessage);
     }
-    register(".composer-surface-chrome", partFixtures.composer);
-    register('.composer-surface-chrome [class*="_footer_"]', partFixtures.composerToolbar);
+    register(':is(.composer-surface-chrome, [class*="_ComposerLayoutRoot_"], [data-composer-surface-variant][data-composer-radius-variant])', partFixtures.composer);
+    register(':is(.composer-surface-chrome [class*="_footer_"], [class*="_ComposerLayoutRoot_"] [class*="_ComposerLayoutFooter_"], [data-composer-surface-variant][data-composer-radius-variant] :is([data-composer-footer-responsive], [class*="_ComposerLayoutFooter_"], [class*="_footer_"]))', partFixtures.composerToolbar);
+  }
+  if (cachedPages) {
+    const page = (name, active) => makeDomNode(name, body,
+      new Map([["data-app-shell-active-page", String(active)]]));
+    partFixtures.homePage = page("cached-home-page", false);
+    partFixtures.threadPage = page("active-thread-page", true);
+    partFixtures.settingsPage = page("cached-settings-page", false);
+    partFixtures.main.parentElement = partFixtures.homePage;
+    partFixtures.header.parentElement = partFixtures.main;
+    for (const key of ["main", "header", "composer", "composerToolbar"]) {
+      const original = partFixtures[key];
+      const parent = key === "main" ? partFixtures.threadPage
+        : key === "composerToolbar" ? partFixtures.activeComposer : partFixtures.activeMain;
+      const active = makeDomNode(`active-${key}`, parent);
+      partFixtures[`active${key[0].toUpperCase()}${key.slice(1)}`] = active;
+      for (const [selector, candidates] of selectorNodes) {
+        if (candidates.includes(original)) register(selector, active);
+      }
+    }
+    partFixtures.thread.parentElement = partFixtures.activeMain;
+    partFixtures.themePreview = makeDomNode("cached-theme-preview", partFixtures.settingsPage);
+    register('[data-testid="theme-preview"]', partFixtures.themePreview);
+    // The skin intentionally hides this icon; its semantic presence still
+    // identifies an active Home and must not require a visible icon box.
+    partFixtures.homeIcon.style.setProperty("display", "none");
+    partFixtures.homeIcon.checkVisibility = () => false;
+    partFixtures.homeIcon.getBoundingClientRect = () => ({ width: 0, height: 0 });
+  }
+  if (settingsPanel) register('[data-settings-panel-slug="general-settings"]',
+    makeDomNode("settings:general-settings", body));
+  if (settings) {
+    for (const selector of ['input[name="appearance-theme"]', '[data-testid="theme-preview"]']) {
+      register(selector, makeDomNode(`settings:${selector}`, body));
+    }
   }
   const makeStyleNode = () => {
     const node = {
@@ -189,12 +259,6 @@ function makeFixture({
     createElement(tag) { return tag === "style" ? makeStyleNode() : { tagName: tag }; },
     getElementById(id) { return nodes.get(id) || null; },
     querySelector(selector) {
-      if (settingsPanel && selector === '[data-settings-panel-slug="general-settings"]') {
-        return makeDomNode("settings:general-settings", body);
-      }
-      if (settings && (selector.includes("appearance-theme") || selector.includes("theme-preview"))) {
-        return makeDomNode(`settings:${selector}`, body);
-      }
       return (selectorNodes.get(selector) || [])[0] || null;
     },
     querySelectorAll(selector) {
@@ -231,6 +295,11 @@ function makeFixture({
   const context = {
     window,
     document,
+    location: {
+      protocol: "app:",
+      pathname,
+      search: initialRoute ? `?initialRoute=${encodeURIComponent(initialRoute)}` : "",
+    },
     MutationObserver: MockMutationObserver,
     CSSStyleSheet: adopted ? MockSheet : undefined,
     Blob,
@@ -240,6 +309,7 @@ function makeFixture({
       createObjectURL() { nextBlob += 1; return `blob:fixture-${nextBlob}`; },
       revokeObjectURL(value) { revoked.push(value); },
     },
+    URLSearchParams,
     performance: { now: () => 1 },
     setTimeout(callback, delay) { const id = ++nextId; timers.set(id, { callback, delay }); return id; },
     clearTimeout(id) { timers.delete(id); },
@@ -247,10 +317,10 @@ function makeFixture({
     clearInterval(id) { intervals.delete(id); },
     console,
   };
-  const payloadFor = (theme = {}) => {
+  const payloadFor = (theme = {}, cssText = ".fixture { color: red; }") => {
     const template = fixture.template;
     return template
-      .replace("__DREAM_SKIN_CSS_JSON__", JSON.stringify(".fixture { color: red; }"))
+      .replace("__DREAM_SKIN_CSS_JSON__", JSON.stringify(cssText))
       .replace("__DREAM_SKIN_ART_JSON__", JSON.stringify("data:image/png;base64,AA=="))
       .replace("__DREAM_SKIN_THEME_JSON__", JSON.stringify({ id: "fixture", appearance: "auto", ...theme }))
       .replace("__DREAM_SKIN_VERSION_JSON__", JSON.stringify("test"))
@@ -330,20 +400,269 @@ export async function runRendererRuntimeTest(assetRoot) {
   // and the measured fossil selector must be absent from the canonical CSS.
   assert.doesNotMatch(css, /(?:^|[.#\s])(?:codex-dream-skin|dream-skin-home|dream-home|dream-task)(?:[\s.#:{>]|$)|home-suggestion-list-item/);
   assert.match(css, /html\[data-dream-skin="active"\]/);
+
+  // Codex 26.924 gave Projects, Pull Requests and Customize their own
+  // full-window opaque surfaces, and each one hides a different layer than
+  // the other two. Every anchor below was counted on the live 26.924
+  // renderer; each rule stays route-scoped on purpose, because an unscoped
+  // `.bg-surface` reset would also strip dialogs, menus and form cards.
+  assert.match(
+    css,
+    /html\[data-dream-skin="active"\] \[data-app-shell-focus-area\] > \.bg-surface \{\s*background: transparent !important;\s*\}/,
+    "Projects route focus area must drop its opaque surface.",
+  );
+  assert.match(
+    css,
+    /html\[data-dream-skin="active"\] \[data-app-shell-pane-frame\],\s*html\[data-dream-skin="active"\] \[data-app-shell-pane-frame\] \.bg-surface \{\s*background: transparent !important;\s*\}/,
+    "Pull Requests detail pane stacks frame, section and container; clearing the frame alone leaves two nested opaque layers.",
+  );
+  assert.match(
+    css,
+    /html\[data-dream-skin="active"\] \[data-app-shell-focus-area\] \[data-sticky\]:not\(:has\(\[data-codex-composer-root\]\)\)::before \{\s*background: transparent !important;\s*backdrop-filter: none !important;\s*\}/,
+    "The sticky utility header must clear both paint and backdrop filtering to avoid a dark blurred wallpaper band.",
+  );
+  assert.doesNotMatch(
+    css,
+    /html\[data-dream-skin="active"\] \.bg-surface\s*\{/,
+    "Utility route surfaces must stay route-scoped; an unscoped .bg-surface reset would also strip dialogs, menus and form cards.",
+  );
+  const sidebar = "(?:__DREAM_SELECTOR_LEFT_PANEL__|aside\\.app-shell-left-panel)";
+  const noInlineColor = "svg:not\\(\\[style\\^=[\"']color:[\"']\\]\\):not\\(\\[style\\*=[\"'];color:[\"']\\]\\):not\\(\\[style\\*=[\"']; color:[\"']\\]\\)";
+  assert.match(
+    css,
+    new RegExp(`${sidebar} ${noInlineColor}\\s*\\{\\s*color:\\s*rgb\\(var\\(--ds-muted-rgb\\) / \\.96\\) !important;`),
+    "Sidebar base icon tint must exempt only an inline color declaration.",
+  );
+  assert.match(
+    css,
+    new RegExp(`${sidebar} button:hover ${noInlineColor},\\s*[\\s\\S]{0,160}${sidebar} a:hover ${noInlineColor}\\s*\\{\\s*color:\\s*var\\(--ds-accent\\) !important;`),
+    "Sidebar hover tint must exempt only an inline color declaration.",
+  );
+  assert.match(
+    css,
+    new RegExp(`${sidebar} \\[aria-current=\\\"page\\\"\\] ${noInlineColor}\\s*\\{\\s*color:\\s*var\\(--ds-accent\\) !important;`),
+    "Sidebar current-page tint must exempt only an inline color declaration.",
+  );
+  assert.doesNotMatch(
+    css,
+    /(?:__DREAM_SELECTOR_LEFT_PANEL__|aside\.app-shell-left-panel) svg\s*\{\s*color:\s*rgb\(var\(--ds-muted-rgb\) \/ \.96\) !important;/,
+    "Sidebar base tint must not override every SVG.",
+  );
+  assert.doesNotMatch(
+    css,
+    /(?:__DREAM_SELECTOR_LEFT_PANEL__|aside\.app-shell-left-panel) button:hover svg\s*,\s*[\s\S]{0,160}(?:__DREAM_SELECTOR_LEFT_PANEL__|aside\.app-shell-left-panel) a:hover svg\s*\{\s*color:\s*var\(--ds-accent\) !important;/,
+    "Sidebar hover tint must not override every SVG.",
+  );
+  assert.doesNotMatch(
+    css,
+    /(?:__DREAM_SELECTOR_LEFT_PANEL__|aside\.app-shell-left-panel) \[aria-current="page"\] svg\s*\{\s*color:\s*var\(--ds-accent\) !important;/,
+    "Sidebar current-page tint must not override every SVG.",
+  );
   // Home gating must stay single-level: CSS forbids :has() inside :has(),
   // and Chromium drops any rule that nests it (the v1.3.1 regression).  The
   // canonical CSS therefore gates on the :has()-free home-route-css alias.
   assert.match(css, /main:is\(\.main-surface, \[data-app-shell-main-surface\], \[class\*=\"_MainContentSurface_\"\]\):has\(\[role="main"\]\)/);
   assert.match(css, /main:is\(\.main-surface, \[data-app-shell-main-surface\], \[class\*=\"_MainContentSurface_\"\]\):not\(:has\(\[role="main"\]\)\)/);
   assert.match(css, /header:is\(\.app-header-tint, \[data-app-shell-header-edge-scroll\], \[class\*=\"_Header_\"\]\)/);
-  assert.match(css, /:is\(\.app-shell-main-content-top-fade, \[data-app-shell-main-content-top-fade\], \[class\*=\"_MainContentTopFade_\"\]\)/);
+  // Codex 26.924 tags the route wrapper with the same attribute, so the bare
+  // form would hide the thread and composer with the fade (#415).
+  assert.match(css, /:is\(\.app-shell-main-content-top-fade, \[data-app-shell-main-content-top-fade\]:not\(:has\(\*\)\), \[class\*=\"_MainContentTopFade_\"\]\)/);
   assert.doesNotMatch(css, /:has\([^()]*:has\(/);
-  assert.match(css, /content:\s*var\(--dream-skin-name[\s\S]{0,180}var\(--dream-skin-brand-subtitle/);
-  assert.match(css, /content:\s*var\(--dream-skin-status/);
-  assert.match(css, /content:\s*var\(--dream-skin-quote/);
+  // The Hazel overlay is appended after the core stylesheet and draws its own
+  // brand/status/quote labels on purpose, so this rule guards only the core.
+  // Whether those labels collide with native content is checked live against
+  // each Codex build, which a static pattern cannot do anyway.
+  const hazelStart = css.indexOf("/* Hazel theme, authored against the upstream selector contract.");
+  assert.doesNotMatch(
+    hazelStart === -1 ? css : css.slice(0, hazelStart),
+    /content:\s*var\(--dream-skin-(?:brand-subtitle|status|quote)/,
+    "Core CSS must not inject fixed branding or status labels over native content.",
+  );
+  assert.match(
+    css,
+    /:is\(\[class~="group\/application-menu-top-bar"\], \[class\*="_ApplicationMenuTopBar_"\]\)[\s\S]{0,140}background:\s*rgb\(var\(--ds-panel-rgb\) \/ var\(--ds-upload-panel-alpha, \.38\)\)/,
+    "The current Windows application menu bar must use the themed acrylic surface.",
+  );
+  const titlebarDecoration = css.match(/\[data-app-shell-titlebar="true"\]::after\s*\{([^}]*)\}/)?.[1];
+  assert.ok(titlebarDecoration, "The native titlebar decoration must exist");
+  assert.match(titlebarDecoration, /position:\s*fixed;/);
+  assert.match(titlebarDecoration, /position-anchor:\s*--ds-titlebar-main;/);
+  assert.match(titlebarDecoration,
+    /background: linear-gradient\(90deg, var\(--ds-titlebar-edge\), var\(--ds-titlebar-mid\) 64%, var\(--ds-titlebar-far\)\)/,
+    "The native main titlebar must paint its scrim at the window top, including full-bleed routes");
+  assert.match(titlebarDecoration, /-webkit-app-region:\s*initial;/,
+    "Electron decoration must not inherit drag: pointer-events alone cannot prevent native mouse interception");
+  assert.match(titlebarDecoration, /pointer-events:\s*none;/);
+  assert.doesNotMatch(css, /-webkit-app-region:\s*(?:no-drag|drag)\s*[;!]/,
+    "Theme CSS must preserve native window dragging and native button hit regions");
+
+  // Matching appearances retain the host palette. Only mismatch scopes may
+  // supply native syntax colors; a generic ds-text mix washes code nearly white.
+  const syntaxRules = [...css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^{}]*--color-codex-syntax-[^{}]*)\}/g)];
+  assert.equal(syntaxRules.length, 2, "Syntax palette overrides must be limited to the two appearance mismatches");
+  const syntaxKinds = ["keyword", "literal", "string", "variable", "name", "attribute", "comment"];
+  for (const [shell, native, palette] of [
+    ["dark", "light", ["#f8a6c8", "#f1a275", "#83d197", "#b897f4", "#63a8f8", "#f9dc78", "#b9b9b9"]],
+    ["light", "dark", ["#ab4f7a", "#ac4f23", "#3a843f", "#643cae", "#1f4e94", "#b8802b", "#4f4f4f"]],
+  ]) {
+    const selector = `html[data-dream-skin="active"][data-dream-shell="${shell}"][data-theme="${native}"] [data-markdown-copy="code-block"]`;
+    const rule = syntaxRules.find((match) => match[1].trim() === selector);
+    assert.ok(rule, `${shell} code palette must only bridge the opposite native appearance`);
+    const colors = Object.fromEntries([...rule[2].matchAll(/--color-codex-syntax-([a-z]+):\s*([^;]+);/g)].map((match) => [match[1], match[2].trim()]));
+    assert.deepEqual(colors, Object.fromEntries(syntaxKinds.map((kind, index) => [kind, palette[index]])),
+      "Native syntax categories must retain their distinct colors, including readable comments");
+  }
+  assert.match(css,
+    /\[data-app-shell-titlebar="true"\] \[data-app-shell-header-slot="start"\]\s*\{\s*background: linear-gradient\(90deg, var\(--ds-titlebar-sidebar\), var\(--ds-titlebar-edge\)\)/,
+    "The native sidebar titlebar slot must bridge into the main scrim");
+  assert.doesNotMatch(css,
+    /(?:^|[;{])\s*(?:color|opacity|--ds-on-accent|--ds-text|--ds-muted|--ds-theme-color-text|--ds-theme-color-muted)\s*:[^;{}]*--ds-upload-/m,
+    "Uploaded background alpha must not change foreground colors or element opacity");
+  // Room's 33% panels can overlap existing conversation glyphs in attachment
+  // suggestions and cmdk search. Blur the painted popup, not its outer portal,
+  // without replacing the author's alpha or changing legacy opaque themes.
+  const popupRules = [...css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^{}]*)\}/g)];
+  const tablePreviewRules = popupRules.filter((rule) => rule[1].includes('[data-testid="image-preview-dismiss-area"]'));
+  assert.equal(tablePreviewRules.length, 5, "Table expansion needs scoped scrim, alpha-only backdrop blur, fullscreen shell, panel and nested-background rules");
+  for (const rule of tablePreviewRules) {
+    assert.ok(rule[1].trim().startsWith('html[data-dream-skin="active"]') && /\btable\b/.test(rule[1]),
+      "Every table-preview override must require an actual table so unrelated media previews and dialogs retain native styling");
+  }
+  const tableScrim = tablePreviewRules.find((rule) => rule[1].includes('.codex-dialog-overlay:has(~ [role="dialog"]'));
+  assert.ok(tableScrim && /background:\s*rgb\(var\(--ds-bg-rgb\) \/ var\(--ds-upload-bg-alpha, \.9\)\)\s*!important/.test(tableScrim[2]),
+    "Only the table preview's associated overlay should honor uploaded background alpha with the legacy 90% fallback");
+  const tableBackdropBlur = tablePreviewRules.filter((rule) => /backdrop-filter:\s*blur\(/.test(rule[2]));
+  assert.equal(tableBackdropBlur.length, 1, "Only the table overlay should blur underlying conversation text");
+  assert.ok(tableBackdropBlur[0][1].trim().startsWith('html[data-dream-skin="active"][data-dream-upload-alpha="true"] .codex-dialog-overlay:has(')
+    && /backdrop-filter:\s*blur\(12px\)\s*!important/.test(tableBackdropBlur[0][2]),
+    "Table backdrop blur must require uploaded alpha and target the overlay, not the isolated preview panel");
+  assert.match(css,
+    /@layer\s+utilities\s*\{\s*html\[data-dream-skin="active"\]\s+\.codex-dialog-overlay:has\(~ \[role="dialog"\] \[data-testid="image-preview-dismiss-area"\] table\)\s*\{[^{}]*background:[^{}]*!important;/,
+    "Table scrim must override native layered !bg-black/90 inside the same utilities layer");
+  const tableShell = tablePreviewRules.find((rule) => rule[1].trim().endsWith('[role="dialog"][aria-modal="true"]:has([data-testid="image-preview-dismiss-area"] table)'));
+  assert.ok(tableShell && /background:\s*transparent\s*!important/.test(tableShell[2])
+    && /backdrop-filter:\s*none\s*!important/.test(tableShell[2]),
+    "Fullscreen table dialog must not add a second painted or blurred card behind the preview panel");
+  const tablePanel = tablePreviewRules.find((rule) => rule[1].includes('> :has(table)'));
+  assert.ok(tablePanel && /background:\s*rgb\(var\(--ds-panel-2-rgb\) \/ var\(--ds-upload-panel-alt-alpha, 1\)\)\s*!important/.test(tablePanel[2]),
+    "Actual table panel must paint the uploaded panelAlt alpha once, remaining opaque when alpha is absent");
+  const nestedTableBackground = tablePreviewRules.find((rule) => rule[1].includes('[class~="bg-inherit"]'));
+  assert.ok(nestedTableBackground && /background:\s*transparent\s*!important/.test(nestedTableBackground[2]),
+    "Nested inherited table backgrounds must not accumulate the panel alpha");
+  // A fixed light skin over native dark must not combine dark syntax/labels
+  // with native dark backgrounds, even when no uploaded alpha is present.
+  const mismatchScope = 'html[data-dream-skin="active"]:is([data-dream-shell="light"][data-theme="dark"], [data-dream-shell="dark"][data-theme="light"])';
+  const mismatchSurface = popupRules.find((rule) => rule[1].trim() === mismatchScope);
+  assert.ok(mismatchSurface, "Surface bridging must cover both mismatches while excluding matching appearances");
+  for (const token of ["surface", "surface-secondary", "surface-tertiary", "surface-elevated", "token-dropdown-background"]) {
+    assert.ok(mismatchSurface[2].includes(`--color-${token}: rgb(var(--ds-panel-rgb) / var(--ds-upload-panel-alpha, 1));`),
+      `${token} must use the skin panel with an opaque fallback for legacy themes`);
+  }
+  for (const [target, property, panel, alpha] of [
+    [':is([role="menu"], [data-ds-part="dialog"])', "background-color", "panel", "panel"],
+  ]) {
+    const rule = popupRules.find((entry) => entry[1].replace(/\s+/g, " ").trim() === `${mismatchScope} ${target}`);
+    assert.ok(rule, `${target} needs a local mismatch-only background bridge`);
+    assert.ok(rule[2].includes(`${property}: rgb(var(--ds-${panel}-rgb) / var(--ds-upload-${alpha}-alpha, 1)) !important;`),
+      `${target} must preserve declared alpha and otherwise remain opaque`);
+  }
+  for (const target of ['[data-markdown-copy="code-block"]', '[data-markdown-table="true"] [data-block-actions="true"]']) {
+    const themedBackgrounds = popupRules.filter((rule) => rule[1].trim().endsWith(target)
+      && /(?:^|;)\s*background:\s*rgb\(/.test(rule[2]));
+    assert.equal(themedBackgrounds.length, 1, `${target} must use one unified theme background rule`);
+    assert.equal(themedBackgrounds[0][1].replace(/\s+/g, " ").trim(), `html[data-dream-skin="active"] ${target}`,
+      "Markdown surfaces must follow the skin palette in matching and mismatched native appearances, with or without uploaded alpha");
+    assert.ok(themedBackgrounds[0][2].includes('background: rgb(var(--ds-panel-2-rgb) / var(--ds-upload-panel-alt-alpha, 1)) !important;'),
+      "Code blocks and table toolbars must preserve panelAlt alpha, defaulting to opaque when absent");
+  }
+  const popupNeutral = popupRules.find((rule) => rule[1].includes('[role="menu"]')
+    && rule[1].includes('[data-markdown-copy="code-block"]')
+    && /--color-text-primary:\s*var\(--ds-text\)/.test(rule[2]));
+  assert.ok(popupNeutral && /color:\s*var\(--ds-text\)/.test(popupNeutral[2]),
+    "Themed menu/code backgrounds must be paired with skin foreground tokens");
+  const attachmentPopup = '[data-composer-overlay-floating-ui="true"] > :has(> [data-mention-list-scroll-area])';
+  const popupBlur = popupRules.find((rule) => rule[1].includes(attachmentPopup)
+    && /backdrop-filter:\s*blur\(24px\)\s*!important/.test(rule[2]));
+  assert.ok(popupBlur, "Attachment suggestions must blur the backdrop on their painted list container");
+  assert.ok(popupBlur[1].includes('[role="menu"]') && popupBlur[1].includes('[data-ds-part="dialog"]'),
+    "Menus and cmdk search dialogs must also obscure underlying conversation glyphs");
+  assert.ok(popupBlur[1].trim().startsWith('html[data-dream-skin="active"][data-dream-upload-alpha="true"]'),
+    "Popup overlap blur must require uploaded alpha so legacy themes retain their rendering");
+  assert.doesNotMatch(popupBlur[2], /(?:background(?:-color)?|opacity|--ds-upload-[\w-]+)\s*:/,
+    "Popup readability must not replace uploaded alpha with an opaque background");
+  const popupText = popupRules.find((rule) => rule[1].includes('[data-composer-overlay-floating-ui="true"]')
+    && rule[1].includes('[data-dream-upload-alpha="true"]')
+    && /--color-codex-description:\s*var\(--ds-text\)/.test(rule[2]));
+  assert.ok(popupText && popupText[1].includes('[role="menu"]') && popupText[1].includes('[data-ds-part="dialog"]'),
+    "Uploaded-alpha attachment, menu and search descriptions must retain readable foreground tokens");
   assert.match(css, /--ds-task-full-veil/);
   assert.match(css, /data-dream-task-mode="full"/);
   assert.match(css, /background-image:\s*var\(--ds-task-full-veil\),\s*var\(--dream-skin-art\)/);
+  assert.match(
+    css,
+    /(?:__DREAM_SELECTOR_COMPOSER_CHROME__|:is\(\.composer-surface-chrome,[^)]*\)|\.composer-surface-chrome)\s*\{[^}]*background:\s*rgb\(var\(--ds-panel-rgb\) \/ var\(--ds-upload-panel-alpha, \.94\)\)/,
+    "Composer background must honor uploaded alpha with the historical 94% fallback",
+  );
+  assert.match(
+    css,
+    /data-composer-utility-bar-variant="home"\][\s\S]{0,180}> \[class\*="_ComposerLayoutBody_"\][\s\S]{0,220}background:\s*transparent\s*!important;[\s\S]{0,180}backdrop-filter:\s*none\s*!important;/,
+    "The Home-only native Composer body must stay transparent behind the public root.",
+  );
+  assert.match(
+    css,
+    /data-composer-placement="thread"\][\s\S]{0,260}> \[class\*="_ComposerLayoutBody_"\][\s\S]{0,220}background:\s*transparent\s*!important;[\s\S]{0,180}backdrop-filter:\s*none\s*!important;/,
+    "The thread Composer body must stay transparent behind the public ComposerLayoutRoot.",
+  );
+  assert.match(
+    css,
+    /(?:__DREAM_SELECTOR_HOME_UTILITY__|:is\(\[class\*="_homeUtilityBar_"\], \[class\*="_ComposerHomeUtilityBar_"\]\))[\s\S]{0,100}position:\s*relative;[\s\S]{0,60}z-index:\s*3;/,
+    "The Home project utility must remain above the composer surface.",
+  );
+  assert.match(
+    css,
+    /\[role="main"\]:has\(\[data-testid="home-icon"\]\):has\(:is\(\[class\*="_homeUtilityBar_"\], \[class\*="_ComposerHomeUtilityBar_"\]\)\)\s*:is\(\.composer-surface-chrome,[^)]*\)\s*\{[^}]*border-radius:\s*22px\s*!important;/,
+    "The Home Composer must keep rounded corners below the utility bar.",
+  );
+  assert.match(
+    css,
+    /\[class~="h-full"\]\[class~="bg-gradient-to-t"\]\[class~="from-surface"\]\[class~="via-surface"\]/,
+    "The current 148px sticky composer fade must be removed by its full utility signature.",
+  );
+  assert.match(
+    css,
+    /\[class~="h-7"\]\[class~="bg-gradient-to-t"\]\[class~="from-surface"\]\[class~="to-transparent"\]/,
+    "The current 28px composer-top fade must be removed by its full utility signature.",
+  );
+  assert.match(
+    css,
+    /\[data-markdown-table="true"\][\s\S]{0,220}margin-inline:\s*0\s*!important/,
+    "Markdown wide tables must remain aligned with the themed message body.",
+  );
+  assert.match(
+    css,
+    /\[data-response-annotation-conversation\]\[data-response-annotation-target\][\s\S]{0,900}backdrop-filter:\s*blur\(20px\)/,
+    "Streaming reasoning needs a readable single themed surface.",
+  );
+  assert.match(
+    css,
+    /\[data-local-conversation-final-assistant\][\s\S]{0,160}\[data-response-annotation-conversation\]\[data-response-annotation-target\][\s\S]{0,260}background:\s*transparent\s*!important/,
+    "Final assistant messages must not retain a nested reasoning surface.",
+  );
+  assert.match(
+    css,
+    /\[data-local-conversation-item-target-ids\][\s\S]{0,900}backdrop-filter:\s*blur\(18px\)/,
+    "Expanded command details need a readable themed surface.",
+  );
+  assert.match(
+    css,
+    /button\[class~="bg-primary-solid"\][\s\S]{0,520}color:\s*var\(--ds-on-accent\)\s*!important/,
+    "Current composer actions must retain computed accent foreground contrast.",
+  );
+  assert.match(
+    css,
+    /(?:__DREAM_SELECTOR_SHELL_MAIN__|main:is\(\.main-surface, \[data-app-shell-main-surface\], \[class\*="_MainContentSurface_"\]\))[\s\S]{0,180}\[data-vscode-context\]\[tabindex="0"\]:focus-visible[\s\S]{0,120}outline:\s*none\s*!important;/,
+    "The non-interactive Codex route wrapper must not draw a window-sized focus outline.",
+  );
   assert.match(
     css,
     /:not\(:has\(main:is\(\.main-surface, \[data-app-shell-main-surface\], \[class\*=\"_MainContentSurface_\"\]\)\)\)[\s\S]{0,120}\[data-ds-part="sidebar"\]/,
@@ -421,6 +740,113 @@ export async function runRendererRuntimeTest(assetRoot) {
     assert.equal(home.partFixtures[fixtureKey].getAttribute("data-ds-part"), part,
       `${part} must be exposed through the public Safe CSS bridge`);
   }
+  assert.equal(home.partFixtures.main.closest('[data-app-shell-active-page="false"]'), null,
+    "The original Home fixture retains legacy DOM without active-page markers.");
+
+  const cached = makeFixture({ cachedPages: true });
+  vm.runInNewContext(cached.payloadFor(), cached.context);
+  const cachedState = cached.window.__CODEX_DREAM_SKIN_STATE__;
+  const cachedParts = cached.partFixtures;
+  assert.equal(cachedState.scope.baseState, "thread",
+    "Cached Home and Settings preceding the active thread must not choose its scope.");
+  assert.equal(cachedState.scope.level, "L1");
+  for (const key of ["main", "header", "home", "homeHero", "composer", "composerToolbar"]) {
+    assert.equal(cachedParts[key].getAttribute("data-ds-part"), null,
+      `Inactive Home ${key} must not receive a public theme part.`);
+  }
+  assert.equal(cachedParts.activeMain.getAttribute("data-ds-part"), "main");
+  assert.equal(cachedParts.activeComposer.getAttribute("data-ds-part"), "composer");
+  assert.equal(cachedParts.thread.getAttribute("data-ds-part"), "thread");
+  const cachedObserver = cached.observers.find((observer) => observer.options?.childList);
+  assert.equal(cachedObserver.options.attributes, true,
+    "Attribute-only route activation must be observed.");
+  assert.ok(cachedObserver.options.attributeFilter.includes("data-app-shell-active-page"));
+  assert.ok(!cachedObserver.options.attributeFilter.includes("data-ds-part")
+    && !cachedObserver.options.attributeFilter.some((name) => name.startsWith("data-dream-has-"))
+    && !cachedObserver.options.attributeFilter.includes("style"),
+    "The part observer must ignore its own writes and native scroll positioning styles.");
+  const switchCachedPage = (activeHome) => {
+    cachedParts.homePage.setAttribute("data-app-shell-active-page", String(activeHome));
+    cachedParts.threadPage.setAttribute("data-app-shell-active-page", String(!activeHome));
+    cachedObserver.callback([cachedParts.homePage, cachedParts.threadPage].map((target) => ({
+      type: "attributes", attributeName: "data-app-shell-active-page", target,
+    })));
+    cached.flushTimers(80);
+  };
+  switchCachedPage(true);
+  assert.equal(cachedState.scope.baseState, "home",
+    "Activating cached Home must refresh scope even though its icon is intentionally hidden.");
+  assert.equal(cachedState.scope.level, "L1");
+  assert.equal(cachedParts.home.getAttribute("data-ds-part"), "home");
+  assert.equal(cachedParts.composer.getAttribute("data-ds-part"), "composer");
+  assert.equal(cachedParts.activeMain.getAttribute("data-ds-part"), null);
+  assert.equal(cachedParts.activeComposer.getAttribute("data-ds-part"), null);
+  assert.equal(cachedParts.thread.getAttribute("data-ds-part"), null);
+  switchCachedPage(false);
+  assert.equal(cachedState.scope.baseState, "thread");
+  assert.equal(cachedParts.home.getAttribute("data-ds-part"), null);
+  assert.equal(cachedParts.composer.getAttribute("data-ds-part"), null);
+  assert.equal(cachedParts.activeComposer.getAttribute("data-ds-part"), "composer");
+  assert.equal(cachedState.metrics.routePasses, 3,
+    "Both attribute-only route changes must refresh scope once.");
+  assert.equal(cachedState.metrics.layoutReads, 0);
+  // A stale marker from an older injection is absent from the current part set.
+  // Cleanup must still remove it from an inactive page through the full DOM.
+  cachedParts.homeIcon.setAttribute("data-ds-part", "home-hero");
+  assert.equal(cachedState.cleanup(), true);
+  assert.ok([...cached.domNodes].every((node) => node.getAttribute("data-ds-part") === null),
+    "Cleanup must remove active parts and stale markers inside inactive pages.");
+
+  const composerBridgeCss = `@layer dreamskin-community {
+    [data-ds-part="composer"] {
+      --ds-community-composer-border-color: rgba(255, 255, 255, 0.28) !important;
+      --ds-community-composer-border-width: 1px !important;
+      --ds-community-composer-border-style: solid !important;
+    }
+  }`;
+  const bridgedComposer = makeFixture({ nativeAppearance: "dark" });
+  bridgedComposer.partFixtures.composer.style.setProperty("border-color", "red");
+  bridgedComposer.partFixtures.composer.style.setProperty("border-width", "2px", "important");
+  bridgedComposer.partFixtures.composer.style.setProperty("border-style", "dashed");
+  vm.runInNewContext(bridgedComposer.payloadFor({}, composerBridgeCss), bridgedComposer.context);
+  for (const property of ["border-color", "border-width", "border-style"]) {
+    assert.equal(
+      bridgedComposer.partFixtures.composer.style.getPropertyValue(property),
+      `var(--ds-community-composer-${property})`,
+      `${property} must be bridged to the validated community cascade`,
+    );
+    assert.equal(bridgedComposer.partFixtures.composer.style.getPropertyPriority(property), "important");
+  }
+  assert.equal(bridgedComposer.window.__CODEX_DREAM_SKIN_STATE__.cleanup(), true);
+  assert.equal(bridgedComposer.partFixtures.composer.style.getPropertyValue("border-color"), "red");
+  assert.equal(bridgedComposer.partFixtures.composer.style.getPropertyPriority("border-width"), "important");
+
+  const petOverlay = makeFixture({ nativeAppearance: "dark", initialRoute: "/avatar-overlay" });
+  vm.runInNewContext(petOverlay.payloadFor(), petOverlay.context);
+  assert.equal(petOverlay.window.__CODEX_DREAM_SKIN_STATE__, undefined,
+    "The avatar overlay must reject Dream Skin before installing renderer state.");
+  assert.equal(petOverlay.window.__CODEX_DREAM_SKIN_DISABLED__, true);
+  assert.equal(petOverlay.document.adoptedStyleSheets.length, 0);
+  assert.equal(petOverlay.attrs.get("data-dream-skin"), undefined);
+
+  const petComposition = makeFixture({
+    nativeAppearance: "dark", pathname: "/avatar-overlay-composition-surface.html",
+  });
+  vm.runInNewContext(petComposition.payloadFor(), petComposition.context);
+  assert.equal(petComposition.window.__CODEX_DREAM_SKIN_STATE__, undefined,
+    "Pet composition surfaces must remain transparent and unthemed.");
+  assert.equal(petComposition.document.adoptedStyleSheets.length, 0);
+
+  const navigatedPet = makeFixture({ nativeAppearance: "dark" });
+  vm.runInNewContext(navigatedPet.payloadFor(), navigatedPet.context);
+  navigatedPet.context.location.pathname = "/avatar-overlay-composition-surface.html";
+  vm.runInNewContext(navigatedPet.payloadFor(), navigatedPet.context);
+  assert.equal(navigatedPet.window.__CODEX_DREAM_SKIN_STATE__, undefined,
+    "Reapplying on a Pet route must clean an older renderer injection.");
+  assert.equal(navigatedPet.document.adoptedStyleSheets.length, 0);
+  assert.equal(navigatedPet.attrs.get("data-dream-skin"), undefined);
+  assert.equal(navigatedPet.revoked.length, 1,
+    "Pet cleanup must revoke the previous wallpaper blob URL.");
   const dynamicMessage = home.addDynamicMessage();
   partObserver.callback([{ type: "childList" }]);
   home.flushTimers(80);
@@ -432,8 +858,10 @@ export async function runRendererRuntimeTest(assetRoot) {
   vm.runInNewContext(modernMessages.payloadFor(), modernMessages.context);
   assert.equal(modernMessages.partFixtures.legacyMessage.getAttribute("data-ds-part"), "message",
     "The legacy message role attribute must remain supported.");
-  assert.equal(modernMessages.partFixtures.userMessage.getAttribute("data-ds-part"), "message",
-    "Codex 26.727 user message anchors must expose the public message part.");
+  assert.equal(modernMessages.partFixtures.userMessage.getAttribute("data-ds-part"), null,
+    "Codex 26.818 full-width user anchors must not receive the public message part.");
+  assert.equal(modernMessages.partFixtures.userMessageBubble.getAttribute("data-ds-part"), "message",
+    "Codex 26.818 user bubbles must expose the public message part at their adaptive boundary.");
   assert.equal(modernMessages.partFixtures.assistantMessage.getAttribute("data-ds-part"), "message",
     "Codex 26.727 assistant message containers must expose the public message part.");
 
@@ -448,6 +876,15 @@ export async function runRendererRuntimeTest(assetRoot) {
     "An aside inside the main content must not be exposed as the app sidebar.");
   assert.equal(generic.partFixtures.dialogInput.getAttribute("data-ds-part"), null,
     "Dialog inputs must not be mistaken for the app composer.");
+
+  const modernComposer = makeFixture({
+    nativeAppearance: "dark", generic: true, modernComposerLayout: true,
+  });
+  vm.runInNewContext(modernComposer.payloadFor(), modernComposer.context);
+  assert.equal(modernComposer.partFixtures.composer.getAttribute("data-ds-part"), "composer",
+    "The ComposerLayoutRoot wrapper must receive the public composer part.");
+  assert.equal(modernComposer.partFixtures.composerFooter.getAttribute("data-ds-part"), null,
+    "The broad composer fallback must not stop at ComposerLayoutFooter.");
 
   const genericSearch = makeFixture({
     nativeAppearance: "dark", generic: true, genericComposer: false, genericSearch: true,
@@ -483,6 +920,13 @@ export async function runRendererRuntimeTest(assetRoot) {
   vm.runInNewContext(full.payloadFor({ art: { taskMode: "full" } }), full.context);
   assert.equal(full.attrs.get("data-dream-task-mode"), "full");
   assert.equal(full.attrs.get("data-dream-art-task-mode"), "full");
+
+  const landscape = makeFixture({ nativeAppearance: "dark" });
+  vm.runInNewContext(landscape.payloadFor({
+    artMetadata: { wide: false, aspect: "wide", focusX: 0.5, focusY: 0.5, taskMode: "ambient" },
+  }), landscape.context);
+  assert.equal(landscape.attrs.get("data-dream-art-wide"), "true",
+    "Landscape artwork classified as wide must use the immersive layout without requiring 16:9.");
 
   const explicitColors = {
     background: "#abc",
@@ -532,8 +976,13 @@ export async function runRendererRuntimeTest(assetRoot) {
     "--ds-theme-color-line": "line",
   };
   for (const [variable, colorKey] of Object.entries(publicColorVariables)) {
-    assert.equal(explicitLight.rootStyle.values.get(variable), explicitColors[colorKey],
-      `${variable} must expose the validated theme color`);
+    const backgroundValues = {
+      background: `rgb(170 187 204 / ${221 / 255})`,
+      panel: `rgb(170 187 204 / ${221 / 255})`,
+      panelAlt: `rgb(17 34 51 / ${68 / 255})`,
+    };
+    assert.equal(explicitLight.rootStyle.values.get(variable), backgroundValues[colorKey] ?? explicitColors[colorKey],
+      `${variable} must expose resolved background alpha and unchanged foreground colors`);
   }
   const renderedRgb = {
     "--ds-bg-rgb": "170 187 204",
@@ -551,6 +1000,64 @@ export async function runRendererRuntimeTest(assetRoot) {
     assert.equal(explicitLight.rootStyle.values.get(variable), expected,
       `${variable} must support official hex forms and clamp RGB channels`);
   }
+
+  const contrastCases = [
+    { accent: "#ffffff", lightInk: "rgb(0 0 0)", darkInk: "rgb(0 0 0)" },
+    { accent: "#000000", lightInk: "rgb(255 255 255)", darkInk: "rgb(255 255 255)" },
+    { accent: "#fff0", lightInk: "rgb(0 0 0)", darkInk: "rgb(255 255 255)" },
+    { accent: "#00000000", lightInk: "rgb(0 0 0)", darkInk: "rgb(255 255 255)" },
+    { accent: "rgba(255, 255, 255, 0.05)", lightInk: "rgb(0 0 0)", darkInk: "rgb(255 255 255)" },
+    { accent: "rgba(999, 999, 999, 0.1)", lightInk: "rgb(0 0 0)", darkInk: "rgb(255 255 255)" },
+  ];
+  for (const nativeAppearance of ["light", "dark"]) {
+    for (const { accent, lightInk, darkInk } of contrastCases) {
+      const contrast = makeFixture({ nativeAppearance });
+      vm.runInNewContext(contrast.payloadFor({
+        appearance: "auto",
+        colorMode: "explicit",
+        explicitColorKeys: ["accent"],
+        colors: { accent },
+      }), contrast.context);
+      assert.equal(contrast.rootStyle.values.get("--ds-green"), accent);
+      assert.equal(
+        contrast.rootStyle.values.get("--ds-on-accent"),
+        nativeAppearance === "light" ? lightInk : darkInk,
+        `Explicit ${accent} must keep readable button text in the ${nativeAppearance} shell`,
+      );
+    }
+  }
+
+  for (const { nativeAppearance, panel, expectedInk } of [
+    { nativeAppearance: "light", panel: "#0000", expectedInk: "rgb(255 255 255)" },
+    { nativeAppearance: "dark", panel: "#fff0", expectedInk: "rgb(255 255 255)" },
+  ]) {
+    const transparentSurfaces = makeFixture({ nativeAppearance });
+    vm.runInNewContext(transparentSurfaces.payloadFor({
+      appearance: "auto",
+      colorMode: "explicit",
+      explicitColorKeys: ["panel", "accent"],
+      colors: {
+        panel,
+        accent: "rgba(0, 0, 0, 0)",
+      },
+    }), transparentSurfaces.context);
+    assert.equal(
+      transparentSurfaces.rootStyle.values.get("--ds-on-accent"),
+      expectedInk,
+      `Transparent accent ink must model the ${panel} composer background alpha`,
+    );
+  }
+
+  const adaptiveAccent = makeFixture({ nativeAppearance: "dark" });
+  vm.runInNewContext(adaptiveAccent.payloadFor({
+    colorMode: "explicit",
+    explicitColorKeys: ["accent"],
+    colors: { accent: "#ffffff" },
+  }), adaptiveAccent.context);
+  assert.equal(adaptiveAccent.rootStyle.values.get("--ds-on-accent"), "rgb(0 0 0)");
+  vm.runInNewContext(adaptiveAccent.payloadFor(), adaptiveAccent.context);
+  assert.equal(adaptiveAccent.rootStyle.values.has("--ds-on-accent"), false,
+    "Reapplying an adaptive accent must restore the shell-specific CSS foreground default");
 
   rootObserver.callback([]);
   home.flushTimers(64);
@@ -578,6 +1085,171 @@ export async function runRendererRuntimeTest(assetRoot) {
   assert.equal(currentSettingsScope.missingL1.length, 0);
   assert.equal(currentSettings.attrs.get("data-dream-skin"), "active");
   assert.equal(currentSettings.document.adoptedStyleSheets.length, 1);
+
+  const alphaNames = ["--ds-upload-panel-alpha", "--ds-upload-bg-alpha", "--ds-upload-panel-alt-alpha"];
+  for (const [panel, expected] of [["#1e1e1e55", 85 / 255], ["#1230", 0], ["#123f", 1],
+    ["rgba(30, 30, 30, 0)", 0], ["rgba(30, 30, 30, 1)", 1], ["rgba(30, 30, 30, .4)", 0.4]]) {
+    const uploaded = makeFixture();
+    vm.runInNewContext(uploaded.payloadFor({ colorMode: "explicit", colors: { panel } }), uploaded.context);
+    assert.equal(uploaded.attrs.get("data-dream-upload-alpha"), "true");
+    for (const name of alphaNames) assert.equal(Number(uploaded.rootStyle.values.get(name)), expected, name);
+    assert.equal(uploaded.rootStyle.values.get("--ds-theme-surface-opacity"), "1",
+      "Background alpha must not change public element opacity");
+    vm.runInNewContext(uploaded.payloadFor({ colors: { panel: "#1e1e1e" } }), uploaded.context);
+    assert.equal(uploaded.attrs.get("data-dream-upload-alpha"), "true");
+    for (const name of alphaNames) assert.equal(uploaded.rootStyle.values.get(name), "0.7",
+      "Switching back to legacy colors must restore default30% transparency");
+  }
+  for (const theme of [{}, { colors: { panel: "#123" } }, { colors: { panel: "rgb(30, 30, 30)" } },
+    { colors: { panel: "#1e1e1e55" }, explicitColorKeys: [] }]) {
+    const legacyAlpha = makeFixture();
+    vm.runInNewContext(legacyAlpha.payloadFor(theme), legacyAlpha.context);
+    assert.equal(legacyAlpha.attrs.get("data-dream-upload-alpha"), "true");
+    for (const name of alphaNames) assert.equal(legacyAlpha.rootStyle.values.get(name), "0.7");
+  }
+  const specificAlpha = makeFixture();
+  vm.runInNewContext(specificAlpha.payloadFor({ colorMode: "explicit", colors: {
+    panel: "#1e1e1e55", background: "#0000", panelAlt: "rgba(40, 40, 40, 1)",
+  } }), specificAlpha.context);
+  assert.equal(specificAlpha.rootStyle.values.get("--ds-upload-bg-alpha"), "0");
+  assert.equal(specificAlpha.rootStyle.values.get("--ds-upload-panel-alt-alpha"), "1");
+  specificAlpha.window.__CODEX_DREAM_SKIN_STATE__.cleanup();
+  assert.equal(specificAlpha.attrs.has("data-dream-upload-alpha"), false);
+  for (const name of alphaNames) assert.equal(specificAlpha.rootStyle.values.has(name), false);
+  const backgroundOnly = makeFixture();
+  vm.runInNewContext(backgroundOnly.payloadFor({ colors: { background: "#0008" } }), backgroundOnly.context);
+  assert.equal(backgroundOnly.attrs.get("data-dream-upload-alpha"), "true");
+  assert.equal(backgroundOnly.rootStyle.values.get("--ds-upload-panel-alpha"), "0.7");
+  assert.equal(backgroundOnly.rootStyle.values.get("--ds-upload-panel-alt-alpha"), "0.7");
+  assert.equal(Number(backgroundOnly.rootStyle.values.get("--ds-upload-bg-alpha")), 136 / 255);
+
+  const predicates = makeFixture();
+  const nativeQueryAll = predicates.document.querySelectorAll;
+  const editorOwned = predicates.partFixtures.composer;
+  const originalClosest = editorOwned.closest.bind(editorOwned);
+  editorOwned.closest = (selector) => selector === '[contenteditable="true"], .ProseMirror'
+    ? editorOwned : originalClosest(selector);
+  let predicateMatches = [predicates.partFixtures.main, editorOwned];
+  const mainMatches = predicates.partFixtures.main.matches.bind(predicates.partFixtures.main);
+  predicates.partFixtures.main.matches = (selector) => selector === ':has([role="main"])'
+    ? predicateMatches.includes(predicates.partFixtures.main) : mainMatches(selector);
+  editorOwned.matches = (selector) => selector === ':has([role="main"])';
+  predicates.document.querySelectorAll = (selector) => selector === '[role="main"]'
+    ? [...(predicateMatches.includes(predicates.partFixtures.main) ? [predicates.partFixtures.home] : []),
+        { parentElement: editorOwned }]
+    : nativeQueryAll(selector);
+  vm.runInNewContext(predicates.payloadFor({}, '.fixture:has([role="main"]) { color: red; }'), predicates.context);
+  const predicateState = predicates.window.__CODEX_DREAM_SKIN_STATE__;
+  const predicateObserver = predicates.observers.find((observer) => observer.options?.childList);
+  const predicateCss = predicates.document.adoptedStyleSheets[0].text;
+  assert.ok(!predicateCss.includes(':has('), "Stylesheet must not retain structural :has invalidation");
+  const marker = predicateCss.match(/\[(data-dream-has-\d+)\]/)[1];
+  assert.equal(predicates.partFixtures.main.getAttribute(marker), "true");
+  assert.equal(editorOwned.getAttribute(marker), null,
+    "Never decorate native editor DOM: ProseMirror normalizes unexpected attributes");
+  const beforePredicates = predicateState.metrics.predicatePasses;
+  predicateObserver.callback([{ type: "attributes", attributeName: "class", oldValue: "scrolling", target: predicates.partFixtures.main }]);
+  predicates.flushTimers(100);
+  assert.equal(predicateState.metrics.predicatePasses, beforePredicates,
+    "Unrelated native scroll classes must not rescan structural selectors");
+  predicates.partFixtures.main.setAttribute("class", "_MainContentSurface_a scrolled");
+  predicateObserver.callback([{ type: "attributes", attributeName: "class", oldValue: "_MainContentSurface_a", target: predicates.partFixtures.main }]);
+  predicateObserver.callback([{ type: "attributes", attributeName: "role", oldValue: null, target: predicates.partFixtures.home }]);
+  predicates.flushTimers(100);
+  assert.equal(predicateState.metrics.predicatePasses, beforePredicates,
+    "Existing shell classes and unchanged attributes must not turn scrolling into rescans");
+  predicateMatches = [];
+  predicateObserver.callback([{ type: "attributes", attributeName: "role", target: predicates.partFixtures.home }]);
+  predicates.flushTimers(100);
+  assert.equal(predicates.partFixtures.main.getAttribute(marker), null,
+    "Structural attribute changes must invalidate cached matches");
+  predicateMatches = [predicates.partFixtures.main];
+  for (let i = 0; i < 5; i++) predicateObserver.callback([{ type: "childList" }]);
+  predicates.flushTimers(100);
+  assert.equal(predicateState.metrics.predicatePasses, beforePredicates + 2,
+    "Streaming DOM bursts must coalesce into one predicate pass");
+  predicates.partFixtures.main.parentElement = null;
+  predicateState.cleanup();
+  assert.equal(predicates.partFixtures.main.getAttribute(marker), null,
+    "Cleanup must remove private markers from detached routes too");
+
+  const localBackgrounds = makeFixture();
+  const communityCss = `@layer dreamskin-community {
+  html[data-dream-skin="active"] [data-ds-part="sidebar"] {
+    background-color: #123456 !important;
+    color: #abcdef !important;
+    opacity: .8 !important;
+  }
+  html[data-dream-skin="active"] [data-ds-part="composer"] {
+    background-color: rgba(12%, 24%, 36%, 45%) !important;
+  }
+  html[data-dream-skin="active"] [data-ds-part="main"] {
+    background-color: transparent !important;
+  }
+}`;
+  vm.runInNewContext(localBackgrounds.payloadFor({}, communityCss), localBackgrounds.context);
+  const adaptedCss = localBackgrounds.document.adoptedStyleSheets[0].text;
+  assert.ok(adaptedCss.includes("rgb(from #123456 r g b / var(--ds-user-surface-alpha, 0.70))"));
+  assert.ok(adaptedCss.includes("rgb(from rgba(12%, 24%, 36%, 45%) r g b / var(--ds-user-surface-alpha, alpha))"));
+  assert.ok(adaptedCss.includes("background-color: transparent !important;"));
+  assert.ok(adaptedCss.includes("color: #abcdef !important;"));
+  assert.ok(adaptedCss.includes("opacity: .8 !important;"));
+
+  for (const transparency of [0, 30, 75, 100]) {
+    const custom = makeFixture();
+    vm.runInNewContext(custom.payloadFor({ userTransparency: transparency, colors: {
+      panel: "#1e1e1e55", background: "#0000", panelAlt: "rgba(40, 40, 40, 1)",
+      text: "#fafafa",
+    } }), custom.context);
+    for (const name of alphaNames) assert.equal(Number(custom.rootStyle.values.get(name)), (100 - transparency) / 100);
+    assert.equal(custom.rootStyle.values.get("--ds-user-surface-alpha"), String((100 - transparency) / 100));
+    assert.equal(custom.rootStyle.values.get("--ds-theme-surface-opacity"), "1");
+    assert.equal(custom.rootStyle.values.get("--ds-theme-color-text"), "#fafafa");
+    vm.runInNewContext(custom.payloadFor({ colors: { panel: "#1e1e1e55" } }), custom.context);
+    assert.equal(Number(custom.rootStyle.values.get("--ds-upload-panel-alpha")), 85 / 255);
+    assert.equal(custom.rootStyle.values.has("--ds-user-surface-alpha"), false,
+      "Reset/switch must remove a previous user override");
+  }
+  for (const invalid of [-1, 101, "30", null]) {
+    const custom = makeFixture();
+    vm.runInNewContext(custom.payloadFor({ userTransparency: invalid }), custom.context);
+    assert.equal(custom.rootStyle.values.get("--ds-upload-panel-alpha"), "0.7");
+  }
+
+  for (const nativeTheme of ["dark", "light"]) {
+    const opposite = nativeTheme === "dark" ? "light" : "dark";
+    const modernAppearance = makeFixture({ nativeAppearance: opposite });
+    modernAppearance.attrs.set("data-theme", nativeTheme);
+    const modernResult = vm.runInNewContext(modernAppearance.payloadFor(), modernAppearance.context);
+    assert.equal(modernResult.shell, nativeTheme,
+      "Native data-theme must beat legacy classes and OS preference for auto themes");
+    assert.equal(modernAppearance.attrs.get("data-dream-shell"), nativeTheme);
+
+    modernAppearance.rootClasses.remove("electron-dark", "electron-light");
+    modernAppearance.attrs.set("data-theme", opposite);
+    modernAppearance.observers.find((observer) => observer.options?.attributes).callback([]);
+    modernAppearance.flushTimers();
+    assert.equal(modernAppearance.attrs.get("data-dream-shell"), opposite,
+      "An existing auto theme must follow native data-theme changes without reinjection");
+
+    const fixedAppearance = makeFixture({ nativeAppearance: nativeTheme });
+    fixedAppearance.attrs.set("data-theme", nativeTheme);
+    vm.runInNewContext(fixedAppearance.payloadFor({ appearance: opposite }), fixedAppearance.context);
+    assert.equal(fixedAppearance.attrs.get("data-dream-shell"), opposite,
+      "Fixed theme appearance must retain precedence over native data-theme");
+  }
+  for (const nativeAppearance of ["dark", "light"]) {
+    const unknownAppearance = makeFixture({ nativeAppearance });
+    unknownAppearance.attrs.set("data-theme", "system");
+    const legacyResult = vm.runInNewContext(unknownAppearance.payloadFor(), unknownAppearance.context);
+    assert.equal(legacyResult.shell, nativeAppearance,
+      "Unresolved native data-theme must retain the legacy class fallback");
+    unknownAppearance.rootClasses.remove("electron-dark", "electron-light");
+    unknownAppearance.observers.find((observer) => observer.options?.attributes).callback([]);
+    unknownAppearance.flushTimers();
+    assert.equal(unknownAppearance.attrs.get("data-dream-shell"), nativeAppearance,
+      "Without explicit native appearance, auto themes must retain the OS fallback");
+  }
 
   const explicit = makeFixture({ nativeAppearance: "light" });
   const result = vm.runInNewContext(explicit.payloadFor({ appearance: "dark", quote: "TEST QUOTE" }), explicit.context);

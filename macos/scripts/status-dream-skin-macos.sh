@@ -5,6 +5,9 @@
 set +e
 set -u
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+. "$SCRIPT_DIR/localization-macos.sh"
+
 SHORT="false"
 JSON="false"
 DEEP="false"
@@ -83,7 +86,7 @@ injector_identity_matches() {
   # Requiring that following token prevents 93410 from matching saved port
   # 9341 via a loose prefix pattern.
   case "$command_lower" in *"--port $expected_port --theme-dir "*) ;; *) return 1 ;; esac
-  actual_start="$(/bin/ps -p "$pid" -o lstart= 2>/dev/null | /usr/bin/awk '{$1=$1; print}')"
+  actual_start="$(LC_ALL=C /bin/ps -p "$pid" -o lstart= 2>/dev/null | /usr/bin/awk '{$1=$1; print}')"
   [ -n "$actual_start" ] && [ "$actual_start" = "$expected_start" ]
 }
 
@@ -157,7 +160,7 @@ if [ -f "$OPERATION_STATE_PATH" ]; then
   elif { [ "$operation_status" = "applying" ] || [ "$operation_status" = "pausing" ]; } \
     && [ "$age" -ge 0 ] && [ "$age" -le $((ttl + 120)) ]; then
     OPERATION_STATUS="failed"
-    OPERATION_MESSAGE="操作超时，请重试"
+    OPERATION_MESSAGE="$(dreamskin_text operation_timeout)"
   fi
 fi
 
@@ -174,22 +177,22 @@ fi
 label="Skin"
 case "$SESSION" in
   active) label="Skin ON" ;;
-  applying) label="Skin 应用中" ;;
+  applying) label="$(dreamskin_text skin_applying_label)" ;;
   paused|off) label="Skin OFF" ;;
-  stale|unknown) label="Skin 异常" ;;
-  *) label="Skin 异常" ;;
+  stale|unknown) label="$(dreamskin_text skin_unavailable)" ;;
+  *) label="$(dreamskin_text skin_unavailable)" ;;
 esac
 case "$OPERATION_STATUS" in
-  applying) label="Skin 应用中" ;;
-  pausing) label="Skin 暂停中" ;;
+  applying) label="$(dreamskin_text skin_applying_label)" ;;
+  pausing) label="$(dreamskin_text skin_pausing_label)" ;;
   failed)
     case "$SESSION" in
-      active) label="Skin ON · 操作失败" ;;
-      paused|off) label="Skin OFF · 操作失败" ;;
-      *) label="Skin 异常 · 操作失败" ;;
+      active) label="Skin ON · $(dreamskin_text operation_failed_short)" ;;
+      paused|off) label="Skin OFF · $(dreamskin_text operation_failed_short)" ;;
+      *) label="$(dreamskin_text skin_unavailable) · $(dreamskin_text operation_failed_short)" ;;
     esac
     ;;
-  cancelled) label="$label · 已取消" ;;
+  cancelled) label="$label · $(dreamskin_text cancelled_short)" ;;
 esac
 
 if [ "$SHORT" = "true" ]; then

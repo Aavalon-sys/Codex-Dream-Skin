@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import { readThemeTransparency, themePreferencesPath } from "../assets/theme-preferences.mjs";
 import { constants as fsConstants } from "node:fs";
 import { createHash } from "node:crypto";
 import path from "node:path";
@@ -39,7 +40,11 @@ const stableTestidLiteral = (testid) => {
   }
   return JSON.stringify(`[data-testid="${testid}"]`);
 };
-const SKIN_VERSION = "1.5.11";
+const SKIN_VERSION = "1.5.21";
+// .github/workflows/ci.yml's version-consistency check greps this file for a
+// literal `const SKIN_VERSION = "...";` line, so the export stays a separate
+// statement rather than an inline `export const`.
+export { SKIN_VERSION };
 const MAX_ART_BYTES = 10 * 1024 * 1024;
 const MAX_STICKER_BYTES = 4 * 1024 * 1024;
 const MAX_SAFE_CSS_BYTES = 256 * 1024;
@@ -486,6 +491,13 @@ function sameFileStat(left, right) {
     && left.ctimeMs === right.ctimeMs;
 }
 
+function isContainedRelativePath(relativePath) {
+  return relativePath !== ""
+    && !path.isAbsolute(relativePath)
+    && relativePath !== ".."
+    && !relativePath.startsWith(`..${path.sep}`);
+}
+
 async function loadSafeCss(themeRoot) {
   const cssPath = path.join(themeRoot, "theme.css");
   let handle;
@@ -513,7 +525,7 @@ async function loadSafeCss(themeRoot) {
   }
 }
 
-export async function loadTheme(themeDir) {
+export async function loadTheme(themeDir, preferenceOptions = {}) {
   const realThemeDir = await fs.realpath(themeDir);
   const themePath = path.join(realThemeDir, "theme.json");
   const themeText = await fs.readFile(themePath, "utf8");
@@ -521,11 +533,14 @@ export async function loadTheme(themeDir) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     throw new Error("Theme root must be an object");
   }
+  if (raw.schemaVersion !== 1) {
+    throw new Error("Theme must use schemaVersion 1");
+  }
   const image = normalizedText(raw.image, "image", null, 240);
   if (!image || path.isAbsolute(image)) throw new Error("Theme image must be a relative path");
   const imagePath = path.resolve(realThemeDir, image);
   const relativeImage = path.relative(realThemeDir, imagePath);
-  if (!relativeImage || relativeImage.startsWith("..") || path.isAbsolute(relativeImage)) {
+  if (!isContainedRelativePath(relativeImage)) {
     throw new Error("Theme image must remain inside the selected theme directory");
   }
   const extension = path.extname(imagePath).toLowerCase();
@@ -534,7 +549,7 @@ export async function loadTheme(themeDir) {
   }
   const realImagePath = await fs.realpath(imagePath);
   const realRelativeImage = path.relative(realThemeDir, realImagePath);
-  if (!realRelativeImage || realRelativeImage.startsWith("..") || path.isAbsolute(realRelativeImage)) {
+  if (!isContainedRelativePath(realRelativeImage)) {
     throw new Error("Theme image cannot escape through a link or junction");
   }
   const art = raw.art && typeof raw.art === "object" && !Array.isArray(raw.art) ? raw.art : {};
@@ -562,6 +577,7 @@ export async function loadTheme(themeDir) {
     line: normalizeThemeColor(rawColors?.line, "rgba(124, 255, 70, .28)"),
   };
   const theme = {
+    schemaVersion: 1,
     id: normalizeThemeText(raw.id, "custom", 80, "id", themePath),
     name: normalizeThemeText(raw.name, "Codex Dream Skin", 80, "name", themePath),
     brandSubtitle: normalizeThemeText(raw.brandSubtitle, "CODEX DREAM SKIN", 120, "brandSubtitle", themePath),
@@ -625,6 +641,8 @@ export async function loadTheme(themeDir) {
         && minHeight >= 0 && minHeight <= 2000 ? { minHeight } : {}),
     };
   }
+  const userTransparency = await readThemeTransparency(theme.id, { preferencesPath: themePreferencesPath("win32"), ...preferenceOptions });
+  if (userTransparency !== undefined) theme.userTransparency = userTransparency;
   const [themeStat, imageStat, safeCss] = await Promise.all([
     fs.stat(themePath),
     fs.stat(realImagePath),
@@ -681,6 +699,7 @@ export async function loadTheme(themeDir) {
   }
   const fingerprint = createHash("sha256")
     .update(themeText, "utf8")
+    .update(JSON.stringify({ userTransparency: theme.userTransparency }))
     .update("\0")
     .update(imageBytes)
     .update("\0")
@@ -780,6 +799,13 @@ async function readThemeSourceStamp(loadedTheme) {
 
 async function probeSession(session) {
   return session.evaluate(`(() => {
+    const initialRoute = new URLSearchParams(String(location.search || ''))
+      .get('initialRoute') || '';
+    const pathname = String(location.pathname || '');
+    const excludedPetSurface = location.protocol === 'app:' && (
+      pathname.endsWith('/avatar-overlay-composition-surface.html') ||
+      initialRoute === '/avatar-overlay' || initialRoute.startsWith('/avatar-overlay/')
+    );
     const genericCodexSurface = () => {
       if (location.protocol !== 'app:') return false;
       const main = document.querySelector('main, [role="main"]');
@@ -801,7 +827,8 @@ async function probeSession(session) {
       Boolean(document.querySelector(${stableTestidLiteral("theme-preview")}));
     return {
       markers,
-      codex: location.protocol === 'app:' &&
+      excludedPetSurface,
+      codex: !excludedPetSurface && location.protocol === 'app:' &&
         ((markers.shell && markers.sidebar) || settings || markers.main || markers.generic),
     };
   })()`);
@@ -908,7 +935,12 @@ async function connectCodexTargets(port, timeoutMs, expectedBrowserId) {
           session = await connectTarget(target, port);
           const probe = await probeSession(session);
           if (probe?.codex) connected.push({ target, session, probe });
-          else session.close();
+          else {
+            if (probe?.excludedPetSurface && !await cleanupExcludedSurface(session)) {
+              throw new Error("Excluded Pet surface cleanup did not verify");
+            }
+            session.close();
+          }
         } catch (error) {
           session?.close();
           lastError = error;
@@ -1209,6 +1241,11 @@ async function verifyRemovedSession(session) {
   })()`);
 }
 
+export async function cleanupExcludedSurface(session) {
+  if (!await removeFromSession(session)) return false;
+  return verifyRemovedSession(session);
+}
+
 export async function verifySession(
   session,
   targetId,
@@ -1240,16 +1277,26 @@ export async function verifySession(
         x: Math.round(r.x), y: Math.round(r.y),
         width: Math.round(r.width), height: Math.round(r.height),
         visible: Boolean(node.isConnected !== false && cssVisible && intersectsViewport),
+        withinViewport: r.x >= 0 && r.y >= 0 && right <= innerWidth && bottom <= innerHeight,
       };
     };
-    const homeIndicator = document.querySelector(${selectorLiteral("home-icon")});
-    const homeSignal = homeIndicator ?? document.querySelector(${selectorLiteral("game-source")}) ??
-      document.querySelector(${selectorLiteral("home-suggestions")});
+    const activeNodes = (selector) => [...document.querySelectorAll(selector)]
+      .filter((node) => !node.closest?.('[data-app-shell-active-page="false"]'));
+    // Hidden home-icon is an intentional theme rule: use ancestry for signals,
+    // and the existing visibility test only for measured layout landmarks.
+    const firstActive = (selector) => activeNodes(selector)[0] ?? null;
+    const firstVisible = (selector) => {
+      const nodes = activeNodes(selector);
+      return nodes.find((node) => box(node)?.visible) ?? nodes[0] ?? null;
+    };
+    const homeIndicator = firstActive(${selectorLiteral("home-icon")});
+    const homeSignal = homeIndicator ?? firstActive(${selectorLiteral("game-source")}) ??
+      firstActive(${selectorLiteral("home-suggestions")});
     const homeRoute = homeSignal?.closest('[role="main"]') ?? null;
     // Codex 26.721.x can render the home content before home-icon. Reuse the
     // already-resolved semantic home container so a healthy home session is
     // not rejected solely because the stricter home-icon selector is late.
-    const home = document.querySelector(${selectorLiteral("home-route")}) ?? homeRoute;
+    const home = firstVisible(${selectorLiteral("home-route")}) ?? homeRoute;
     const suggestions = home?.querySelector(${selectorLiteral("home-suggestions")}) ?? null;
     const cardButtons = suggestions ? [...suggestions.querySelectorAll('button')] : [];
     const cards = cardButtons.map(box);
@@ -1269,9 +1316,9 @@ export async function verifySession(
     const visibleSuggestionLabels = suggestionLabels.filter((item) => item?.visible);
     const suggestionLabelColorsMatch = visibleSuggestionLabels.every((item) =>
       item.color === item.expectedColor);
-    const settingsAnchor = document.querySelector(${selectorLiteral("settings-panel")}) ||
-      document.querySelector(${selectorLiteral("appearance-radio")}) ||
-      document.querySelector(${stableTestidLiteral("theme-preview")});
+    const settingsAnchor = firstVisible(${selectorLiteral("settings-panel")}) ||
+      firstVisible(${selectorLiteral("appearance-radio")}) ||
+      firstVisible(${stableTestidLiteral("theme-preview")});
     const runtime = window.__CODEX_DREAM_SKIN_STATE__;
     const adopted = runtime?.styleMode === 'adopted' &&
       [...document.adoptedStyleSheets].includes(runtime.styleSheet);
@@ -1316,11 +1363,11 @@ export async function verifySession(
       visibleCardCount: visibleCards.length,
       suggestionLabels,
       suggestionLabelColorsMatch,
-      composer: box(document.querySelector(${selectorLiteral("composer-chrome")})),
-      shell: box(document.querySelector(${selectorLiteral("shell-main")})),
-      sidebar: box(document.querySelector(${selectorLiteral("left-panel")})),
-      genericMain: box(document.querySelector('[data-ds-part="main"], [data-ds-part="home"]')),
-      genericInput: box(document.querySelector('[data-ds-part="composer"]')),
+      composer: box(firstVisible(${selectorLiteral("composer-chrome")})),
+      shell: box(firstVisible(${selectorLiteral("shell-main")})),
+      sidebar: box(firstVisible(${selectorLiteral("left-panel")})),
+      genericMain: box(firstVisible('[data-ds-part="main"], [data-ds-part="home"]')),
+      genericInput: box(firstVisible('[data-ds-part="composer"]')),
       nativeWindow: ${JSON.stringify(nativeWindow)},
       documentVisibility: document.visibilityState ?? null,
       documentHidden: document.hidden === true,
@@ -1363,7 +1410,16 @@ export async function verifySession(
       windowPass, documentPass, viewportPass, structurePass,
       nativeWindowPass, fallbackWindowPass,
     };
+    // A visible shell can coexist with a Home composer pushed below the window.
+    // Mere intersection is insufficient: the observed Windows regression left
+    // only 37px of a 98px composer inside a 600px viewport. Keep this requirement
+    // scoped to Home, since tool/settings pages can legitimately omit input.
+    const homeComposer = result.composer ?? result.genericInput;
+    result.homeComposerPass = !homeScope || Boolean(
+      homeComposer?.visible && homeComposer.withinViewport
+    );
     const homePass = !homeScope || (
+      result.homeComposerPass &&
       result.homePresent && Boolean(result.homeSurface?.visible) &&
       ((result.hero?.visible && result.hero.width >= 280 && result.hero.height >= 120) ||
         Boolean(result.genericMain?.visible)) &&
@@ -1373,8 +1429,8 @@ export async function verifySession(
       ))
     );
     result.pass = result.installed && result.version === result.expectedVersion &&
-      result.stylePresent && result.businessClassPollution === 0 && windowPass &&
-      documentPass && viewportPass && structurePass &&
+      result.stylePresent && result.businessClassPollution === 0 && !result.documentOverflow.x &&
+      windowPass && documentPass && viewportPass && structurePass &&
       payloadPass && homePass;
     return result;
   })()`);
@@ -1647,6 +1703,12 @@ async function runWatch(options) {
           const now = Date.now();
           let shouldAudit = !loadedPayload || now - lastStrongThemeAuditAt >= STRONG_THEME_AUDIT_MS;
           if (!shouldAudit) {
+            const userTransparency = await readThemeTransparency(loadedPayload.theme.id, {
+              preferencesPath: themePreferencesPath("win32"),
+            });
+            shouldAudit = userTransparency !== loadedPayload.theme.userTransparency;
+          }
+          if (!shouldAudit) {
             try {
               shouldAudit = await readThemeSourceStamp(loadedPayload) !== loadedPayload.sourceStamp;
             } catch {
@@ -1762,6 +1824,9 @@ async function runWatch(options) {
           const probe = await waitForCodexProbe(session);
           if (!probe?.codex) {
             await removeEarlyPayload(session, earlyScriptId);
+            if (probe?.excludedPetSurface && !await cleanupExcludedSurface(session)) {
+              throw new Error("Excluded Pet surface cleanup did not verify");
+            }
             rejectTarget(target, 5000);
             session.close();
             continue;

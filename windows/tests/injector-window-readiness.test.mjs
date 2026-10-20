@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
-import { verifySession } from "../scripts/injector.mjs";
+import { SKIN_VERSION, verifySession } from "../scripts/injector.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const startPath = path.resolve(here, "../scripts/start-dream-skin.ps1");
@@ -12,7 +12,7 @@ const startPath = path.resolve(here, "../scripts/start-dream-skin.ps1");
 const selectors = {
   shell: 'main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"])',
   sidebar: "aside.app-shell-left-panel",
-  composer: ".composer-surface-chrome",
+  composer: ':is(.composer-surface-chrome, [class*="_ComposerLayoutRoot_"], [data-composer-surface-variant][data-composer-radius-variant])',
   homeIcon: '[data-testid="home-icon"]',
   home: '[role="main"]:has([data-testid="home-icon"])',
   gameSource: '[data-feature="game-source"]',
@@ -94,12 +94,14 @@ function makeDomFixture({
   hidden = false,
   viewportWidth = 1280,
   viewportHeight = 800,
+  scrollWidth = viewportWidth,
+  scrollHeight = viewportHeight,
 } = {}) {
   const styleNode = {};
   const documentElement = {
-    scrollWidth: viewportWidth,
+    scrollWidth,
     clientWidth: viewportWidth,
-    scrollHeight: viewportHeight,
+    scrollHeight,
     clientHeight: viewportHeight,
     getAttribute: (name) => name === "data-dream-skin" ? "active" : null,
   };
@@ -120,12 +122,15 @@ function makeDomFixture({
       if (selector === selectors.settings || selector === selectors.themePreview) return settings;
       return null;
     },
-    querySelectorAll: () => [],
+    querySelectorAll(selector) {
+      const node = this.querySelector(selector);
+      return node ? [node] : [];
+    },
     getElementById: (id) => id === "codex-dream-skin-style" ? styleNode : null,
   };
   const window = {
     __CODEX_DREAM_SKIN_STATE__: {
-      version: "1.5.11",
+      version: SKIN_VERSION,
       themeId: "fixture-theme",
       revision: "fixture-revision",
       styleMode: "style",
@@ -296,7 +301,7 @@ test("visible settings is the only L0 structure exception", async () => {
     "A renderer that claims Home must expose a real Home identity signal.");
 });
 
-test("home verification matches macOS and does not require a fixed suggestion-card count", async () => {
+test("home verification does not require a fixed suggestion-card count", async () => {
   const oneSuggestion = {
     querySelectorAll: (selector) => selector === "button"
       ? [makeSuggestionButton({ text: "One real card" })]
@@ -335,6 +340,30 @@ test("home verification matches macOS and does not require a fixed suggestion-ca
   });
   assert.equal(badHome.result.suggestionLabelColorsMatch, false);
   assert.equal(badHome.result.pass, false);
+});
+
+test("home composer must fit completely inside the viewport", async () => {
+  for (const [label, rect, expected] of [
+    ["observed clipping", makeRect(1031, 98, 100, 563), false],
+    ["bottom boundary", makeRect(1031, 98, 100, 502), true],
+    ["above viewport", makeRect(800, 98, 100, -1), false],
+    ["right clipping", makeRect(1031, 98, 200, 400), false],
+  ]) {
+    const { result } = await verify({ dom: makeDomFixture({
+      viewportWidth: 1183, viewportHeight: 600,
+      home: makeHome({ rect: makeRect(1127, 500, 52, 96) }),
+      composer: makeElement({ rect }),
+    }) });
+    assert.equal(result.composer.visible, true, label);
+    assert.equal(result.homeComposerPass, expected, label);
+    assert.equal(result.pass, expected, label);
+  }
+  for (const composer of [null, makeElement({ visible: false })]) {
+    const { result } = await verify({ dom: makeDomFixture({ home: makeHome(), composer }) });
+    assert.equal(result.pass, false, "Missing or hidden Home input must fail");
+  }
+  const { result } = await verify({ dom: makeDomFixture({ composer: null }) });
+  assert.equal(result.pass, true, "Non-Home tools may omit a composer");
 });
 
 // Regression for #256. The previous version of this test asserted that a
@@ -455,6 +484,27 @@ test("hidden documents and unreasonable viewports cannot pass", async () => {
   });
   assert.equal(tiny.result.pass, false);
   assert.equal(tiny.result.readiness.viewportPass, false);
+});
+
+test("horizontal document overflow cannot be reported as a verified skin", async () => {
+  const boundary = await verify({
+    dom: makeDomFixture({ scrollWidth: 1280 }),
+  });
+  assert.equal(boundary.result.documentOverflow.x, false);
+  assert.equal(boundary.result.pass, true, "Equal document and viewport widths are not overflow.");
+
+  const horizontal = await verify({
+    dom: makeDomFixture({ scrollWidth: 1281 }),
+  });
+  assert.equal(horizontal.result.documentOverflow.x, true);
+  assert.equal(horizontal.result.pass, false);
+
+  const verticalOnly = await verify({
+    dom: makeDomFixture({ scrollHeight: 1600 }),
+  });
+  assert.equal(verticalOnly.result.documentOverflow.y, true);
+  assert.equal(verticalOnly.result.documentOverflow.x, false);
+  assert.equal(verticalOnly.result.pass, true, "Vertical scrolling is expected for long conversations.");
 });
 
 test("zero-size and CSS-hidden shell anchors cannot satisfy L1", async () => {

@@ -4,10 +4,11 @@
 
 ## 开始任务
 
-- 先阅读根目录 README、相关平台文档、当前分支状态和目标文件，不凭记忆推断现状。
+- 先阅读根目录 README、**最新的 `docs/handoff-*.md`**、相关平台文档、当前分支状态和目标文件，不凭记忆推断现状。交接文档是了解当前状态最快的入口：`main` 上有哪些已合并但未发布的提交、哪些事卡在外部确认、以及本机做不了哪些验证。
 - 中大型任务必须建立或更新根目录 `TASK_PROGRESS.md`。记录目标、范围、当前分支或 worktree、已完成项、进行中项、阻塞、测试结果、PR、合并及 Release 状态。
 - 在每个里程碑、任务切换、出现阻塞、准备交接以及上下文可能压缩前更新 `TASK_PROGRESS.md`。内容必须可让新 Agent 直接续做，不只写“处理中”。
 - `TASK_PROGRESS.md` 是本地连续性文件，不提交密钥、令牌、Webhook、个人路径中的隐私数据或未经确认的生产配置。
+- `TASK_PROGRESS.md`、`.local-evidence/` 等任务流水与本机证据只保留本地，禁止提交；`main` 文件树不得包含 `TASK_PROGRESS.md`。已跟踪的进度文件须取消跟踪并保留本地副本。
 
 ## 优先级
 
@@ -55,6 +56,9 @@
 - 不为追求绿色测试降低安全断言、跳过失败用例或把真实失败改成无条件 skip。
 
 ## Git 与发布
+
+- Write all new commit messages in English, including squash/merge commit titles and bodies.
+- 每次发布遵循 [`docs/releases/README.md`](docs/releases/README.md)：版本 PR 必须包含中文 `docs/releases/vX.Y.Z.md` 和完整英文 `docs/releases/vX.Y.Z-en.md`，顶部互链；以用户可感知的新增、修复和升级说明为先，附贡献者与完整变更链接；Release 展示中文正文，下载信息由工作流追加。
 
 - 保留用户现有改动；禁止未经授权的 reset、checkout 丢弃、强推、移动已公开 tag 或覆盖已公开 Release。
 - 功能开发、版本准备和紧急修复使用独立分支；提交只包含当前范围，推送前审查 staged diff。

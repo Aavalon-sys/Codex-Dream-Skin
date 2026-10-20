@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import { readThemeTransparency, themePreferencesPath } from "../assets/theme-preferences.mjs";
 import { constants as fsConstants, watch as watchFs } from "node:fs";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -43,7 +44,11 @@ const stableTestidLiteral = (testid) => {
   }
   return JSON.stringify(`[data-testid="${testid}"]`);
 };
-const SKIN_VERSION = "1.5.11";
+const SKIN_VERSION = "1.5.21";
+// .github/workflows/ci.yml's version-consistency check greps this file for a
+// literal `const SKIN_VERSION = "...";` line, so the export stays a separate
+// statement rather than an inline `export const`.
+export { SKIN_VERSION };
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
 const CDP_ID_PATTERN = /^[A-Za-z0-9._-]{1,200}$/;
 const MAX_ART_BYTES = 10 * 1024 * 1024;
@@ -507,6 +512,13 @@ async function listAppTargets(port) {
 
 async function probeSession(session) {
   return session.evaluate(`(() => {
+    const initialRoute = new URLSearchParams(String(location.search || ''))
+      .get('initialRoute') || '';
+    const pathname = String(location.pathname || '');
+    const excludedPetSurface = location.protocol === 'app:' && (
+      pathname.endsWith('/avatar-overlay-composition-surface.html') ||
+      initialRoute === '/avatar-overlay' || initialRoute.startsWith('/avatar-overlay/')
+    );
     const genericCodexSurface = () => {
       if (location.protocol !== 'app:') return false;
       const main = document.querySelector('main, [role="main"]');
@@ -528,7 +540,8 @@ async function probeSession(session) {
       Boolean(document.querySelector(${stableTestidLiteral("theme-preview")}));
     return {
       markers,
-      codex: location.protocol === 'app:' &&
+      excludedPetSurface,
+      codex: !excludedPetSurface && location.protocol === 'app:' &&
         ((markers.shell && markers.sidebar) || settings || markers.main || markers.generic),
     };
   })()`);
@@ -562,7 +575,12 @@ async function connectCodexTargets(port, timeoutMs) {
           session = await connectTarget(target, port);
           const probe = await probeSession(session);
           if (probe?.codex) connected.push({ target, session, probe });
-          else session.close();
+          else {
+            if (probe?.excludedPetSurface && !await cleanupExcludedSurface(session)) {
+              throw new Error("Excluded Pet surface cleanup did not verify");
+            }
+            session.close();
+          }
         } catch (error) {
           session?.close();
           lastError = error;
@@ -623,7 +641,7 @@ async function loadSafeCss(assetsRoot) {
   }
 }
 
-export async function loadTheme(themeDir) {
+export async function loadTheme(themeDir, preferenceOptions = {}) {
   const requestedRoot = themeDir ?? path.join(root, "assets");
   const configPath = path.join(requestedRoot, "theme.json");
   let assetsRoot;
@@ -765,6 +783,8 @@ export async function loadTheme(themeDir) {
       ...(minHeight !== undefined ? { minHeight } : {}),
     };
   }
+  const userTransparency = await readThemeTransparency(theme.id, { preferencesPath: themePreferencesPath("darwin"), ...preferenceOptions });
+  if (userTransparency !== undefined) theme.userTransparency = userTransparency;
   if (appearance !== undefined) theme.appearance = appearance;
   if (Object.values(art).some((value) => value !== undefined)) {
     theme.art = Object.fromEntries(Object.entries(art).filter(([, value]) => value !== undefined));
@@ -878,11 +898,11 @@ function invalidateStaticPayloadAssets() {
   staticPayloadAssets = null;
 }
 
-export async function loadPayload(themeDir) {
+export async function loadPayload(themeDir, preferenceOptions = {}) {
   const startedAt = performance.now();
   const [staticAssets, loaded] = await Promise.all([
     loadStaticPayloadAssets(),
-    loadTheme(themeDir),
+    loadTheme(themeDir, preferenceOptions),
   ]);
   const { css, template } = staticAssets;
   const { art, extension, safeCssRuntime, safeCssStatus, theme } = loaded;
@@ -1166,6 +1186,11 @@ async function verifyRemovedSession(session) {
   })()`);
 }
 
+export async function cleanupExcludedSurface(session) {
+  if (!await removeFromSession(session)) return false;
+  return verifyRemovedSession(session);
+}
+
 export async function inspectNativeWindow(session) {
   try {
     const response = await session.send(
@@ -1179,26 +1204,50 @@ export async function inspectNativeWindow(session) {
   }
 }
 
-async function verifySession(session, expectedThemeId = null, expectedRevision = null) {
+export async function verifySession(session, expectedThemeId = null, expectedRevision = null) {
   const renderer = await session.evaluate(`(() => {
     const box = (node) => {
       if (!node) return null;
       const r = node.getBoundingClientRect();
       const style = getComputedStyle(node);
+      const opacity = Number.parseFloat(style.opacity);
+      const right = Number.isFinite(r.right) ? r.right : r.x + r.width;
+      const bottom = Number.isFinite(r.bottom) ? r.bottom : r.y + r.height;
+      let cssVisible = r.width > 0 && r.height > 0 && style.display !== 'none' &&
+        style.visibility !== 'hidden' && style.visibility !== 'collapse' &&
+        style.contentVisibility !== 'hidden' && (!Number.isFinite(opacity) || opacity > 0);
+      try {
+        if (typeof node.checkVisibility === 'function') {
+          cssVisible = cssVisible && node.checkVisibility({
+            checkOpacity: true,
+            checkVisibilityCSS: true,
+          });
+        }
+      } catch {}
+      const intersectsViewport = right > 0 && bottom > 0 && r.x < innerWidth && r.y < innerHeight;
       return {
         x: Math.round(r.x), y: Math.round(r.y),
         width: Math.round(r.width), height: Math.round(r.height),
-        visible: r.width > 0 && r.height > 0 && style.display !== 'none' && style.visibility !== 'hidden',
+        visible: Boolean(node.isConnected !== false && cssVisible && intersectsViewport),
       };
     };
-    const homeIndicator = document.querySelector(${selectorLiteral("home-icon")});
-    const homeSignal = homeIndicator ?? document.querySelector(${selectorLiteral("game-source")}) ??
-      document.querySelector(${selectorLiteral("home-suggestions")});
+    const activeNodes = (selector) => [...document.querySelectorAll(selector)]
+      .filter((node) => !node.closest?.('[data-app-shell-active-page="false"]'));
+    // Hidden home-icon is an intentional theme rule: use ancestry for signals,
+    // and the existing visibility test only for measured layout landmarks.
+    const firstActive = (selector) => activeNodes(selector)[0] ?? null;
+    const firstVisible = (selector) => {
+      const nodes = activeNodes(selector);
+      return nodes.find((node) => box(node)?.visible) ?? nodes[0] ?? null;
+    };
+    const homeIndicator = firstActive(${selectorLiteral("home-icon")});
+    const homeSignal = homeIndicator ?? firstActive(${selectorLiteral("game-source")}) ??
+      firstActive(${selectorLiteral("home-suggestions")});
     const homeRoute = homeSignal?.closest('[role="main"]') ?? null;
     // Codex 26.721.x can render the home content before home-icon. Reuse the
     // already-resolved semantic home container so a healthy home session is
     // not rejected solely because the stricter home-icon selector is late.
-    const home = document.querySelector(${selectorLiteral("home-route")}) ?? homeRoute;
+    const home = firstVisible(${selectorLiteral("home-route")}) ?? homeRoute;
     const suggestions = home?.querySelector(${selectorLiteral("home-suggestions")}) ?? null;
     const cardButtons = suggestions ? [...suggestions.querySelectorAll('button')] : [];
     const cardBoxes = cardButtons.map(box);
@@ -1237,15 +1286,15 @@ async function verifySession(session, expectedThemeId = null, expectedRevision =
       ?? siblingCandidates.find((item) => item?.visible)
       ?? box(boxableChain[boxableChain.length - 1]);
     const projectButton = box(home?.querySelector(${selectorLiteral("project-selector")} + " > button"));
-    const shell = box(document.querySelector(${selectorLiteral("shell-main")}));
-    const composer = box(document.querySelector(${selectorLiteral("composer-chrome")}));
-    const sidebar = box(document.querySelector(${selectorLiteral("left-panel")}));
-    const genericMain = box(document.querySelector('[data-ds-part="main"], [data-ds-part="home"]'));
-    const genericInput = box(document.querySelector('[data-ds-part="composer"]'));
+    const shell = box(firstVisible(${selectorLiteral("shell-main")}));
+    const composer = box(firstVisible(${selectorLiteral("composer-chrome")}));
+    const sidebar = box(firstVisible(${selectorLiteral("left-panel")}));
+    const genericMain = box(firstVisible('[data-ds-part="main"], [data-ds-part="home"]'));
+    const genericInput = box(firstVisible('[data-ds-part="composer"]'));
     const settingsBoxes = [
-      box(document.querySelector(${selectorLiteral("settings-panel")})),
-      box(document.querySelector(${selectorLiteral("appearance-radio")})),
-      box(document.querySelector(${stableTestidLiteral("theme-preview")})),
+      box(firstVisible(${selectorLiteral("settings-panel")})),
+      box(firstVisible(${selectorLiteral("appearance-radio")})),
+      box(firstVisible(${stableTestidLiteral("theme-preview")})),
     ];
     const settings = settingsBoxes.find((item) => item?.visible) ??
       settingsBoxes.find(Boolean) ?? null;
@@ -1296,14 +1345,31 @@ async function verifySession(session, expectedThemeId = null, expectedRevision =
   });
 }
 
-async function waitForVerifiedSession(session, timeoutMs, expectedThemeId = null, expectedRevision = null) {
+export async function waitForVerifiedSession(
+  session,
+  timeoutMs,
+  expectedThemeId = null,
+  expectedRevision = null,
+  retryDelayMs = 500,
+) {
   const deadline = Date.now() + timeoutMs;
+  const retryDelay = Number.isFinite(retryDelayMs) && retryDelayMs >= 0 ? retryDelayMs : 500;
   let lastResult;
+  let lastError;
   while (Date.now() < deadline) {
-    lastResult = await verifySession(session, expectedThemeId, expectedRevision);
-    if (lastResult.pass) return lastResult;
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    try {
+      lastResult = await verifySession(session, expectedThemeId, expectedRevision);
+      lastError = null;
+      if (lastResult.pass) return lastResult;
+    } catch (error) {
+      // Renderer navigations can invalidate Runtime.evaluate while Codex is
+      // swapping documents. Treat that as a transient sample until the same
+      // bounded verification deadline expires, matching the Windows injector.
+      lastError = error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, retryDelay));
   }
+  if (!lastResult && lastError) throw lastError;
   return lastResult;
 }
 
@@ -1477,6 +1543,54 @@ async function runOneShot(options) {
   if (failed) process.exitCode = 2;
 }
 
+/**
+ * Backoff for the watcher's CDP target-discovery loop.
+ *
+ * The ceiling used to be a flat 500ms, so once Codex exited the watcher kept
+ * polling a dead endpoint about twice a second for as long as it stayed
+ * loaded, writing `fetch failed` to the error log every 2s. Users reported the
+ * machine becoming noticeably sluggish with no Codex running at all (#218).
+ *
+ * Simply stopping the watcher would be worse: a brief navigation, reload, or
+ * renderer restart also fails discovery, and the watcher is what repaints the
+ * skin afterwards — killing it is how live theme switching breaks (#200). So
+ * the fast ramp is preserved for short outages and the ceiling escalates only
+ * once the endpoint has been continuously unreachable, which is the shape of a
+ * closed Codex rather than a reloading one.
+ */
+export const DISCOVERY_BACKOFF = {
+  initialMs: 100,
+  factor: 1.6,
+  /** Ceiling while an outage still looks like a reload. */
+  ceilingMs: 500,
+  /** After this much continuous failure, treat Codex as gone. */
+  idleAfterMs: 10_000,
+  idleCeilingMs: 5_000,
+  /** And after this much, stop paying for polling almost entirely. */
+  dormantAfterMs: 60_000,
+  dormantCeilingMs: 30_000,
+};
+
+export function nextDiscoveryDelayMs(currentDelayMs, outageMs, config = DISCOVERY_BACKOFF) {
+  const ceiling = outageMs >= config.dormantAfterMs
+    ? config.dormantCeilingMs
+    : outageMs >= config.idleAfterMs
+      ? config.idleCeilingMs
+      : config.ceilingMs;
+  const base = Number.isFinite(currentDelayMs) && currentDelayMs > 0
+    ? currentDelayMs
+    : config.initialMs;
+  return Math.min(ceiling, Math.round(base * config.factor));
+}
+
+/**
+ * Log cadence follows the backoff instead of a fixed 2s, so a watcher left
+ * running overnight against a closed Codex cannot fill `injector-error.log`.
+ */
+export function discoveryLogIntervalMs(delayMs, config = DISCOVERY_BACKOFF) {
+  return Math.max(2000, Math.min(delayMs * 4, config.dormantCeilingMs * 2));
+}
+
 export function earlyPayloadFor(payload, revision) {
   return `(() => {
     const generationKey = "__CODEX_DREAM_SKIN_EARLY_GENERATION__";
@@ -1534,6 +1648,7 @@ function watchPayloadSources(themeDir, onDirty) {
         const staticChanged = directory === assetsRoot &&
           (!name || name === "dream-skin.css" || name === "renderer-inject.js");
         if (kind === "static" && !staticChanged) return;
+        if (kind === "preferences" && name && name !== "theme-preferences.json") return;
         onDirty({ staticChanged });
       });
       watcher.on("error", (error) => {
@@ -1545,6 +1660,7 @@ function watchPayloadSources(themeDir, onDirty) {
     }
   };
   add(themeRoot, "theme");
+  add(path.dirname(themePreferencesPath("darwin")), "preferences");
   if (themeRoot !== assetsRoot) add(assetsRoot, "static");
   return () => watchers.forEach((watcher) => watcher.close());
 }
@@ -1652,8 +1768,9 @@ async function runWatch(options) {
   let stopping = false;
   let reloadTimer = null;
   let reloadChain = Promise.resolve();
-  let discoveryDelayMs = 100;
+  let discoveryDelayMs = DISCOVERY_BACKOFF.initialMs;
   let lastListErrorAt = 0;
+  let discoveryOutageSince = 0;
   let operationSignalChain = Promise.resolve();
   let activeOperation = null;
   let pauseRecovery = null;
@@ -1969,14 +2086,18 @@ async function runWatch(options) {
       let targets = [];
       try {
         targets = await listAppTargets(options.port);
-        discoveryDelayMs = 100;
+        discoveryDelayMs = DISCOVERY_BACKOFF.initialMs;
+        discoveryOutageSince = 0;
       } catch (error) {
-        if (Date.now() - lastListErrorAt >= 2000) {
+        const now = Date.now();
+        if (!discoveryOutageSince) discoveryOutageSince = now;
+        const outageMs = now - discoveryOutageSince;
+        if (now - lastListErrorAt >= discoveryLogIntervalMs(discoveryDelayMs)) {
           console.error(`[dream-skin] ${new Date().toISOString()} ${error.message}`);
-          lastListErrorAt = Date.now();
+          lastListErrorAt = now;
         }
         await new Promise((resolve) => setTimeout(resolve, discoveryDelayMs));
-        discoveryDelayMs = Math.min(500, Math.round(discoveryDelayMs * 1.6));
+        discoveryDelayMs = nextDiscoveryDelayMs(discoveryDelayMs, outageMs);
         continue;
       }
 
@@ -2049,12 +2170,16 @@ async function runWatch(options) {
           const probe = await waitForCodexProbe(session);
           if (!probe?.codex) {
             await removeEarly(record);
+            if (probe?.excludedPetSurface && !await cleanupExcludedSurface(session)) {
+              throw new Error("Excluded Pet surface cleanup did not verify");
+            }
             session.close();
             sessions.delete(target.id);
-            if (!rejected.has(target.id)) {
+            if (!probe?.excludedPetSurface && !rejected.has(target.id)) {
               console.error(`[dream-skin] rejected non-ChatGPT app target ${target.id}`);
               rejected.add(target.id);
             }
+            if (probe?.excludedPetSurface) rejected.delete(target.id);
             continue;
           }
           rejected.delete(target.id);

@@ -16,6 +16,20 @@ while IFS= read -r file; do "$NODE" --check "$file" >/dev/null; done < <(
 # same source aborts at runtime under a UTF-8 locale with `set -u` and masks
 # the real failure behind a bogus "unbound variable" (#251).
 "$NODE" "$ROOT/tests/shell-braced-vars-before-cjk.test.mjs"
+"$NODE" --test "$ROOT/tests/restart-cancellation.test.mjs"
+
+ZH_COPY="$(DREAMSKIN_LANG=zh-CN /bin/bash -c '
+  . "$1/scripts/localization-macos.sh"
+  printf "%s|%s|%s" "$(dreamskin_language)" "$(dreamskin_text apply)" "$(dreamskin_text skin_applied)"
+' _ "$ROOT")"
+EN_COPY="$(DREAMSKIN_LANG=en-US /bin/bash -c '
+  . "$1/scripts/localization-macos.sh"
+  printf "%s|%s|%s" "$(dreamskin_language)" "$(dreamskin_text apply)" "$(dreamskin_text skin_applied)"
+' _ "$ROOT")"
+[ "$ZH_COPY" = 'zh|应用|皮肤已应用' ] \
+  || { printf 'Chinese runtime localization contract failed: %s\n' "$ZH_COPY" >&2; exit 1; }
+[ "$EN_COPY" = 'en|Apply|Skin applied' ] \
+  || { printf 'English runtime localization contract failed: %s\n' "$EN_COPY" >&2; exit 1; }
 
 if /usr/bin/grep -R -n -E 'dream-skin-skin|DREAM_SKIN_SKIN|1\.0\.0-rc2' \
   "$ROOT/scripts" "$ROOT/assets" >/dev/null; then
@@ -77,7 +91,7 @@ fi
   "$ROOT/scripts/switch-theme-macos.sh"
 /usr/bin/grep -F -q 'CFBundleURLTypes.0.CFBundleURLSchemes.0' "$ROOT/scripts/build-dmg.sh"
 for required_runtime in apply-community-theme-macos.sh snapshot-active-theme-macos.sh \
-  theme-content-fingerprint.mjs theme-switch-lock-macos.sh; do
+  theme-content-fingerprint.mjs theme-switch-lock-macos.sh localization-macos.sh; do
   /usr/bin/grep -F -q "$required_runtime" "$ROOT/scripts/build-dmg.sh"
 done
 UPDATE_JSON="$({
@@ -86,11 +100,23 @@ UPDATE_JSON="$({
 })"
 "$NODE" -e '
   const value = JSON.parse(process.argv[1]);
-  if (value.currentVersion !== "v1.5.11" || value.latestVersion !== "v9.8.7") process.exit(1);
+  if (value.currentVersion !== "v1.5.21" || value.latestVersion !== "v9.8.7") process.exit(1);
   if (!value.updateAvailable) process.exit(1);
   if (value.releaseUrl !== "https://github.com/Fei-Away/Codex-Dream-Skin/releases/latest") process.exit(1);
 ' "$UPDATE_JSON"
+UPDATE_REDIRECT_JSON="$({
+  CODEX_DREAM_SKIN_TEST_REDIRECT_HEADERS_FILE="$ROOT/tests/fixtures/latest-release.headers" \
+    "$ROOT/scripts/check-update-macos.sh" --json
+})"
+"$NODE" -e '
+  const value = JSON.parse(process.argv[1]);
+  if (value.currentVersion !== "v1.5.21" || value.latestVersion !== "v9.8.7") process.exit(1);
+  if (!value.updateAvailable) process.exit(1);
+  if (value.releaseUrl !== "https://github.com/Fei-Away/Codex-Dream-Skin/releases/latest") process.exit(1);
+' "$UPDATE_REDIRECT_JSON"
+"$NODE" --test "$ROOT/tests/update-fallback.test.mjs"
 if /usr/bin/grep -R -n -E --exclude-dir='.build' \
+  --exclude-dir='.build-*' \
   'xattr|spctl[[:space:]]+--master-disable' \
   "$ROOT/menubar-app" "$ROOT/scripts/build-menubar-app.sh" "$ROOT/scripts/build-dmg.sh" >/dev/null; then
   printf 'Native distribution must not bypass Gatekeeper or remove quarantine attributes.\n' >&2
@@ -145,8 +171,11 @@ fi
 PROJECT_ROOT="$(cd "$ROOT/.." && pwd -P)"
 "$NODE" "$PROJECT_ROOT/tools/sync-runtime-assets.mjs" --check
 "$NODE" "$PROJECT_ROOT/tools/doctor-selectors.test.mjs"
-if ! /usr/bin/cmp -s "$ROOT/assets/dream-skin.css" "$PROJECT_ROOT/windows/assets/dream-skin.css" ||
-    ! /usr/bin/cmp -s "$ROOT/assets/renderer-inject.js" "$PROJECT_ROOT/windows/assets/renderer-inject.js" ||
+# The sync check above validates each CSS output against its canonical source:
+# macOS keeps shared CSS, Windows applies explicit Home/motion/shell adapters.
+# Keep byte identity mandatory for the remaining shared executable assets.
+"$NODE" --test "$PROJECT_ROOT/tools/windows-home-css.test.mjs" "$PROJECT_ROOT/tools/windows-motion-css.test.mjs"
+if ! /usr/bin/cmp -s "$ROOT/assets/renderer-inject.js" "$PROJECT_ROOT/windows/assets/renderer-inject.js" ||
     ! /usr/bin/cmp -s "$ROOT/assets/safe-css-policy.json" "$PROJECT_ROOT/windows/assets/safe-css-policy.json" ||
     ! /usr/bin/cmp -s "$ROOT/assets/safe-css-validator.mjs" "$PROJECT_ROOT/windows/assets/safe-css-validator.mjs" ||
     ! /usr/bin/cmp -s "$ROOT/assets/selectors.json" "$PROJECT_ROOT/windows/assets/selectors.json" ||
@@ -190,6 +219,37 @@ fi
 "$ROOT/tests/theme-zip-extract.test.sh"
 "$ROOT/tests/installer-preflight.test.sh"
 "$NODE" "$ROOT/tests/theme-config.test.mjs"
+
+# check-image-dimensions rejects decompression bombs before sips can rasterize them.
+write_png_header() { # <path> <width> <height>
+  "$NODE" -e '
+    const fs = require("node:fs");
+    const buffer = Buffer.alloc(24);
+    Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a]).copy(buffer, 0);
+    buffer.writeUInt32BE(13, 8);
+    buffer.write("IHDR", 12, "ascii");
+    buffer.writeUInt32BE(Number(process.argv[2]), 16);
+    buffer.writeUInt32BE(Number(process.argv[3]), 20);
+    fs.writeFileSync(process.argv[1], buffer);
+  ' "$1" "$2" "$3"
+}
+CID_TMP="$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/codex-dream-skin-cid.XXXXXX")"
+write_png_header "$CID_TMP/huge.png" 20000 20000
+if "$NODE" "$ROOT/scripts/check-image-dimensions.mjs" "$CID_TMP/huge.png" >/dev/null 2>&1; then
+  printf 'check-image-dimensions accepted a 20000x20000 (400 MP) image.\n' >&2
+  /bin/rm -rf "$CID_TMP"; exit 1
+fi
+write_png_header "$CID_TMP/ok.png" 1600 900
+if ! "$NODE" "$ROOT/scripts/check-image-dimensions.mjs" "$CID_TMP/ok.png" >/dev/null 2>&1; then
+  printf 'check-image-dimensions rejected a valid 1600x900 image.\n' >&2
+  /bin/rm -rf "$CID_TMP"; exit 1
+fi
+/usr/bin/printf 'not-an-image' > "$CID_TMP/invalid.png"
+if "$NODE" "$ROOT/scripts/check-image-dimensions.mjs" "$CID_TMP/invalid.png" >/dev/null 2>&1; then
+  printf 'check-image-dimensions accepted an image whose dimensions could not be determined safely.\n' >&2
+  /bin/rm -rf "$CID_TMP"; exit 1
+fi
+/bin/rm -rf "$CID_TMP"
 
 # Every bundled preset must be a valid, injectable theme pack with a preset-* id.
 for preset in "$ROOT"/presets/preset-*/; do
@@ -644,7 +704,7 @@ STATUS_FAKE_INJECTOR="$TMP/status-fake-injector.mjs"
 "$NODE" "$STATUS_FAKE_INJECTOR" --watch --port 93410 --theme-dir "$TMP" &
 STATUS_PID="$!"
 /bin/sleep 0.08
-STATUS_START="$(/bin/ps -p "$STATUS_PID" -o lstart= 2>/dev/null | /usr/bin/awk '{$1=$1; print}')"
+STATUS_START="$(LC_ALL=C /bin/ps -p "$STATUS_PID" -o lstart= 2>/dev/null | /usr/bin/awk '{$1=$1; print}')"
 "$NODE" -e '
   const fs = require("node:fs");
   const [file, pid, node, injector, startedAt] = process.argv.slice(1);
@@ -667,15 +727,19 @@ STATUS_JSON="$(/usr/bin/env HOME="$STATUS_HOME" "$ROOT/scripts/status-dream-skin
 wait "$STATUS_PID" 2>/dev/null || true
 STATUS_PID=""
 
-# The common stop path must reject a real watcher running on 19341 when the
-# saved state claims 1934, even though nodePath/injectorPath/start-time all
-# match. This exercises the signal gate directly (status has its own matcher).
-"$NODE" "$ROOT/scripts/injector.mjs" --watch --port 19341 --theme-dir "$ROOT/presets/preset-gothic-void-crusade" \
+# The common stop path must reject a watcher on 19341 when state claims 1934.
+# Use the inert fixture: a real injector could reach a working client on that
+# loopback port even with an isolated HOME.
+"$NODE" "$STATUS_FAKE_INJECTOR" --watch --port 19341 --theme-dir "$TMP" \
   >"$TMP/near-prefix-injector.out" 2>&1 &
 WATCH_PID="$!"
 /bin/sleep 0.2
-WATCH_START="$(/bin/ps -p "$WATCH_PID" -o lstart= 2>/dev/null | /usr/bin/awk '{$1=$1; print}')"
+WATCH_START="$(LC_ALL=C /bin/ps -p "$WATCH_PID" -o lstart= 2>/dev/null | /usr/bin/awk '{$1=$1; print}')"
 [ -n "$WATCH_START" ] || { printf 'Could not record near-prefix watcher start time.\n' >&2; exit 1; }
+/usr/bin/env HOME="$STOP_HOME" NODE="$NODE" /bin/bash -c '
+  . "$1/scripts/common-macos.sh"
+  recorded_injector_process_matches "$2" "$3" "$NODE" "$4" 19341
+' _ "$ROOT" "$WATCH_PID" "$WATCH_START" "$STATUS_FAKE_INJECTOR"
 "$NODE" -e '
   const fs = require("node:fs");
   const [file, pid, node, injector, startedAt] = process.argv.slice(1);
@@ -688,9 +752,11 @@ WATCH_START="$(/bin/ps -p "$WATCH_PID" -o lstart= 2>/dev/null | /usr/bin/awk '{$
     injectorPath: injector,
     nodePath: node,
   })}\n`);
-' "$STOP_STATE_ROOT/state.json" "$WATCH_PID" "$NODE" "$ROOT/scripts/injector.mjs" "$WATCH_START"
+' "$STOP_STATE_ROOT/state.json" "$WATCH_PID" "$NODE" "$STATUS_FAKE_INJECTOR" "$WATCH_START"
 if /usr/bin/env HOME="$STOP_HOME" NODE="$NODE" /bin/bash -c '
   . "$1/scripts/common-macos.sh"
+  # This fixture tests PID identity, not discovery of the installed signed app.
+  ensure_node_runtime() { [ -x "$NODE" ]; }
   INJECTOR_JOB_LABEL="$2"
   stop_recorded_injector 2>/dev/null
 ' _ "$ROOT" "$TEST_INJECTOR_JOB_LABEL"; then
@@ -720,6 +786,45 @@ if /usr/bin/grep -F -q 'launchctl remove "$INJECTOR_JOB_LABEL" >/dev/null 2>&1 |
 fi
 if /usr/bin/grep -F -q 'index($0, "--port " port)' "$ROOT/scripts/common-macos.sh"; then
   printf 'injector discovery still accepts a near-prefix port.\n' >&2
+  exit 1
+fi
+APPLY_SCRIPT="$ROOT/scripts/apply-from-menubar-macos.sh"
+/usr/bin/grep -F -q 'if hot_reapply_theme "$PORT" 8000; then' "$APPLY_SCRIPT"
+/usr/bin/grep -F -q 'SESSION="off"' "$APPLY_SCRIPT"
+/usr/bin/grep -F -q 'if ! confirm "$PROMPT" "$OK_LABEL"; then' "$APPLY_SCRIPT"
+/usr/bin/grep -F -q '"$SCRIPT_DIR/start-dream-skin-macos.sh" --prompt-restart' "$APPLY_SCRIPT"
+if /usr/bin/grep -F -q 'CODEX_RUNNING=' "$APPLY_SCRIPT" ||
+   /usr/bin/grep -F -q 'MENU_ACTION=' "$APPLY_SCRIPT" ||
+   /usr/bin/grep -F -q 'OPEN_PROMPT=' "$APPLY_SCRIPT"; then
+  printf 'menu apply must preserve the original session-driven prompt model.\n' >&2
+  exit 1
+fi
+HOT_LINE="$(/usr/bin/grep -n 'hot_reapply_theme "$PORT" 8000' "$APPLY_SCRIPT" | /usr/bin/head -1 | /usr/bin/cut -d: -f1)"
+CONFIRM_LINE="$(/usr/bin/grep -n 'if ! confirm "$PROMPT" "$OK_LABEL"; then' "$APPLY_SCRIPT" | /usr/bin/head -1 | /usr/bin/cut -d: -f1)"
+START_LINE="$(/usr/bin/grep -n 'start-dream-skin-macos.sh" --prompt-restart' "$APPLY_SCRIPT" | /usr/bin/head -1 | /usr/bin/cut -d: -f1)"
+if [ -z "$HOT_LINE" ] || [ -z "$CONFIRM_LINE" ] || [ -z "$START_LINE" ] ||
+   [ "$CONFIRM_LINE" -ge "$HOT_LINE" ] ||
+   [ "$HOT_LINE" -ge "$START_LINE" ]; then
+  printf 'menu apply must keep its confirmation and hot-reapply before falling back to start.\n' >&2
+  exit 1
+fi
+MENU_SOURCE="$ROOT/menubar-app/Sources/CodexDreamSkinMenuBar/AppDelegate.swift"
+OPEN_CODEX_BODY="$(/usr/bin/sed -n '/@objc private func openCodex()/,/@objc private func openDreamSkinWebsite()/p' "$MENU_SOURCE")"
+/usr/bin/grep -F -q 'addActionItem(copy.text(.openChatGPT), action: #selector(openCodex), enabled: !busy)' "$MENU_SOURCE"
+/usr/bin/grep -F -q 'showError(title: copy.text(.notFoundTitle), message: copy.text(.notFoundMessage))' "$MENU_SOURCE"
+/usr/bin/grep -F -q 'addLanguageMenu()' "$MENU_SOURCE"
+/usr/bin/grep -F -q 'DreamSkinLanguage.defaultsKey' "$MENU_SOURCE"
+/usr/bin/grep -F -q 'environment["DREAMSKIN_LANG"] = DreamSkinLanguage.stored().environmentValue' \
+  "$ROOT/menubar-app/Sources/CodexDreamSkinMenuBar/ScriptRunner.swift"
+/usr/bin/grep -F -q 'guard !engineNeedsInstall(),' "$MENU_SOURCE"
+/usr/bin/grep -F -q 'let script = installedScript(named: "start-dream-skin-macos.sh") else {' "$MENU_SOURCE"
+/usr/bin/grep -F -q 'NSWorkspace.shared.openApplication(at: appURL, configuration: configuration)' "$MENU_SOURCE"
+/usr/bin/grep -F -q 'ScriptRunner.run(script: script)' "$MENU_SOURCE"
+/usr/bin/grep -F -q 'title: self.copy.text(.openFailedTitle),' "$MENU_SOURCE"
+if /usr/bin/grep -F -q 'applyTitle = "打开并应用皮肤"' "$MENU_SOURCE" ||
+   /usr/bin/grep -F -q 'runInstalledScript(named: "apply-from-menubar-macos.sh", operation: "打开 ChatGPT")' "$MENU_SOURCE" ||
+   /usr/bin/printf '%s\n' "$OPEN_CODEX_BODY" | /usr/bin/grep -F -q 'installBundledEngineIfNeeded(force:'; then
+  printf 'Open ChatGPT must keep its menu title and must not use menu apply or install the engine implicitly.\n' >&2
   exit 1
 fi
 
@@ -1071,7 +1176,7 @@ CRLF_BACKUP="$TMP/config-crlf-backup.json"
 "$NODE" "$ROOT/scripts/theme-config.mjs" restore "$CRLF_CONFIG" "$CRLF_BACKUP" >/dev/null
 /usr/bin/cmp -s "$CRLF_CONFIG" "$TMP/original-crlf.toml"
 
-/usr/bin/env -u HOME /bin/bash -c '. "$1/scripts/common-macos.sh"; [ -n "$HOME" ] && [ "$SKIN_VERSION" = "1.5.11" ]' _ "$ROOT"
+/usr/bin/env -u HOME /bin/bash -c '. "$1/scripts/common-macos.sh"; [ -n "$HOME" ] && [ "$SKIN_VERSION" = "1.5.21" ]' _ "$ROOT"
 if [ "${CODEX_DREAM_SKIN_SKIP_DOCTOR:-0}" = "1" ]; then
   printf 'SKIP: Doctor requires an installed, signed Codex app.\n'
   DOCTOR_RESULT="skipped"

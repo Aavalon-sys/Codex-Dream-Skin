@@ -98,10 +98,12 @@ in app** to open `dreamskin://apply?version=...`. Windows shows a native
 confirmation first. After confirmation, the client downloads that exact version
 only from `https://api.dreamskin.cc`, checks the reviewed metadata, actual byte
 count, and SHA-256, then runs the same manifest, image, ZIP, and Safe CSS checks
-as manual import before switching. Codex may restart when it is open without a
-usable skin session, so save unfinished input first. The link cannot provide an
-arbitrary download URL, file path, command, or silent-apply option. Incomplete
-legacy themes remain rejected by the client.
+as manual import before switching. If there is no verifiable skin session, the
+client first starts or restarts Codex and verifies that the on-disk active theme
+is the one visibly rendered; only then does it write the downloaded theme, so a
+rollback baseline is always available. Save unfinished input first. The link
+cannot provide an arbitrary download URL, file path, command, or silent-apply
+option. Incomplete legacy themes remain rejected by the client.
 
 Import a UI-free wallpaper rather than a preview containing a window, sidebar, composer, text, or buttons. Images may be at most 10 MB, 16384 pixels on either side, and 50 million total pixels.
 
@@ -201,6 +203,8 @@ Starting with Codex Store `26.715.10079.0`, the owl runtime may convert package-
 
 Field results in issue #235 now confirm two independent failures: WindowsApps returns `access-denied` for direct launch on `26.715.10079.0`, while `26.721.3404.0` retains the raw CDP arguments but its production runtime still opens no listener. Either result means that Codex/Windows combination cannot enable the skin within the project's safety boundary. The fallback is currently a safe diagnostic and rollback path, not a compatibility guarantee for affected owl builds. Do not take ownership of WindowsApps or patch the official package; keep the complete error and follow issue #235 for upstream compatibility status.
 
+If debug launch or visible renderer verification fails, the launcher first confirms that every Codex process started by this attempt is closed, then restores only this attempt's appearance-key values that are still unchanged. Newer config edits are preserved instead of replacing the whole file from an old backup. A bounded `preparing` transaction is saved before the marker/config commits; after a forced process termination, the next locked operation recovers by comparing the before, intended, and current values. If Codex cannot be confirmed closed or recovery cannot finish safely, one-click apply preserves the current theme files and exact prior-theme snapshot rather than racing the running app. This mechanism is not evidence that an affected official Codex build has restored CDP support.
+
 ### The skin stops working after a Codex update
 
 Run the installer and launch shortcut again. The scripts rediscover the currently registered Store package instead of trusting an executable path from an older app version.
@@ -209,9 +213,11 @@ Open the repository's [new issue page](https://github.com/Fei-Away/Codex-Dream-S
 
 ## Security boundaries
 
-- CDP binds only to `127.0.0.1`. Avoid untrusted local software while the skin is active.
+- CDP binds only to `127.0.0.1`, but it has no authentication; another process on the same computer may still connect and inspect or control the renderer.
+- Pausing the theme or stopping only the injector does not close the debug port of a running Codex process. Use a full restore with restart, or quit every Codex process and reopen the official app normally, to end the exposure window.
 - The tool does not modify the official Codex installation, WindowsApps, `app.asar`, or signatures.
 - It does not write API keys, Base URLs, or model provider settings.
 - Restore controls only Codex processes that pass package identity, executable path, and recorded session checks.
+- See [`../SECURITY.md`](../SECURITY.md) for the complete threat model and operating guidance.
 
 Maintainer and agent constraints live in [`SKILL.md`](./SKILL.md). See [`references/runtime-notes.md`](./references/runtime-notes.md) for deeper runtime troubleshooting.

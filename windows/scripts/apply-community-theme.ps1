@@ -1,14 +1,26 @@
-﻿[CmdletBinding()]
+﻿[CmdletBinding(DefaultParameterSetName = 'Apply')]
 param(
-  [Parameter(Mandatory = $true, Position = 0)]
+  [Parameter(Mandatory = $true, Position = 0, ParameterSetName = 'Apply')]
   [ValidateNotNullOrEmpty()]
-  [string]$Uri
+  [string]$Uri,
+  [Parameter(Mandatory = $true, ParameterSetName = 'Functions')]
+  [switch]$FunctionsOnly
 )
 
-$ErrorActionPreference = 'Stop'
-Set-StrictMode -Version 2.0
-. (Join-Path $PSScriptRoot 'common-windows.ps1')
-. (Join-Path $PSScriptRoot 'theme-windows.ps1')
+if (-not $FunctionsOnly) {
+  $ErrorActionPreference = 'Stop'
+  Set-StrictMode -Version 2.0
+  . (Join-Path $PSScriptRoot 'common-windows.ps1')
+  . (Join-Path $PSScriptRoot 'theme-windows.ps1')
+  . (Join-Path $PSScriptRoot 'localization-windows.ps1')
+  $dreamSkinLanguage = Resolve-DreamSkinLanguage `
+    -StateRoot (Join-Path $env:LOCALAPPDATA 'CodexDreamSkin')
+}
+
+function Get-DreamSkinCommunityText {
+  param([Parameter(Mandatory = $true)][string]$Key, [object[]]$FormatArguments = @())
+  Get-DreamSkinText -Key $Key -Language $dreamSkinLanguage -FormatArguments $FormatArguments
+}
 
 function Show-DreamSkinCommunityMessage {
   param(
@@ -36,9 +48,10 @@ function Format-DreamSkinCommunitySuccessMessage {
     [string]$Name,
     [string]$CleanupWarning = ''
   )
-  $message = "主题「$Name」已通过下载、SHA-256、主题包与 Safe CSS 校验，并已应用到 Codex。"
+  $message = Get-DreamSkinCommunityText -Key 'CommunitySuccess' -FormatArguments @($Name)
   if (-not [string]::IsNullOrWhiteSpace($CleanupWarning)) {
-    $message += "`r`n`r`n主题已成功应用，但旧备份目录未能自动清理；新主题不会因此回滚。请稍后重启客户端并查看日志。"
+    $message += [Environment]::NewLine + [Environment]::NewLine +
+      (Get-DreamSkinCommunityText -Key 'CommunityCleanup')
   }
   return $message
 }
@@ -47,18 +60,18 @@ function Confirm-DreamSkinCommunityApply {
   param([Parameter(Mandatory = $true)][object]$Metadata)
   Add-Type -AssemblyName System.Windows.Forms -ErrorAction Stop
   $sizeMiB = [Math]::Round($Metadata.PackageBytes / 1MB, 2)
-  $message = @"
-从 DreamSkin.cc 下载并应用“$($Metadata.Name)”？
-
-作者：$($Metadata.AuthorDisplayName)
-版本：$($Metadata.Version) · $sizeMiB MiB
-SHA-256：$($Metadata.PackageSha256)
-
-客户端只会连接固定官方 API，并重新校验下载大小、SHA-256、ZIP、清单和 Safe CSS。应用时 Codex 可能重启，未保存的输入可能丢失。主题内容不会作为命令执行。
-"@
+  $message = @(
+    (Get-DreamSkinCommunityText -Key 'CommunityConfirm' -FormatArguments @($Metadata.Name)),
+    '',
+    (Get-DreamSkinCommunityText -Key 'CommunityAuthor' -FormatArguments @($Metadata.AuthorDisplayName)),
+    (Get-DreamSkinCommunityText -Key 'CommunityVersion' -FormatArguments @($Metadata.Version, $sizeMiB)),
+    (Get-DreamSkinCommunityText -Key 'CommunityHash' -FormatArguments @($Metadata.PackageSha256)),
+    '',
+    (Get-DreamSkinCommunityText -Key 'CommunitySafety')
+  ) -join [Environment]::NewLine
   $choice = [System.Windows.Forms.MessageBox]::Show(
     $message.Trim(),
-    '确认一键换肤',
+    (Get-DreamSkinCommunityText -Key 'CommunityConfirmTitle'),
     [System.Windows.Forms.MessageBoxButtons]::YesNo,
     [System.Windows.Forms.MessageBoxIcon]::Question,
     [System.Windows.Forms.MessageBoxDefaultButton]::Button2
@@ -306,6 +319,52 @@ function Set-DreamSkinActiveThemeFromSnapshot {
   return $activeFingerprint
 }
 
+function Get-DreamSkinCommunityStartFailureMessage {
+  param(
+    [Parameter(Mandatory = $true)][string]$Category,
+    [Parameter(Mandatory = $true)][string]$AppearanceRecovery
+  )
+  $messageKey = switch ($Category) {
+    'cdp-launch-failed' { 'CommunityStartCdpLaunchFailed' }
+    'cdp-direct-access-denied' { 'CommunityStartCdpDirectAccessDenied' }
+    'cdp-endpoint-unavailable' { 'CommunityStartCdpEndpointUnavailable' }
+    'port-unavailable' { 'CommunityStartPortUnavailable' }
+    'state-reconciliation-failed' { 'CommunityStartStateReconciliationFailed' }
+    'injector-start-failed' { 'CommunityStartInjectorFailed' }
+    'renderer-verification-failed' { 'CommunityStartRendererVerificationFailed' }
+    'superseded' { 'CommunityStartSuperseded' }
+    default { 'CommunityStartInternalFailure' }
+  }
+  $message = Get-DreamSkinCommunityText -Key $messageKey
+  $recoveryKey = switch ($AppearanceRecovery) {
+    'restored' { 'CommunityStartAppearanceRestored' }
+    'conflict-preserved' { 'CommunityStartAppearanceConflictPreserved' }
+    'blocked' { 'CommunityStartAppearanceBlocked' }
+    'preserved-rendered' { 'CommunityStartAppearancePreservedRendered' }
+    default { $null }
+  }
+  if ($recoveryKey) {
+    $message += ' ' + (Get-DreamSkinCommunityText -Key $recoveryKey)
+  }
+  return $message
+}
+
+function New-DreamSkinCommunityStartStateException {
+  param(
+    [Parameter(Mandatory = $true)][string]$Message,
+    [switch]$StillRunning,
+    [AllowNull()][System.Exception]$InnerException
+  )
+  $exception = if ($null -ne $InnerException) {
+    [System.InvalidOperationException]::new($Message, $InnerException)
+  } else {
+    [System.InvalidOperationException]::new($Message)
+  }
+  $exception.Data['DreamSkinStartStateUnconfirmed'] = $true
+  if ($StillRunning) { $exception.Data['DreamSkinStartStillRunning'] = $true }
+  return $exception
+}
+
 function Invoke-DreamSkinCommunityStartAndVerify {
   param(
     [ValidateRange(1000, 300000)]
@@ -316,20 +375,66 @@ function Invoke-DreamSkinCommunityStartAndVerify {
   if (-not (Test-Path -LiteralPath $startScript -PathType Leaf)) {
     throw 'The managed Dream Skin start script is missing.'
   }
+  $stateRoot = Join-Path $env:LOCALAPPDATA 'CodexDreamSkin'
+  $resultToken = [guid]::NewGuid().ToString('N')
+  $resultPath = Get-DreamSkinStartResultPath -StateRoot $stateRoot -Token $resultToken
+  if (Test-Path -LiteralPath $resultPath) {
+    throw (New-DreamSkinCommunityStartStateException `
+      -Message (Get-DreamSkinCommunityText -Key 'CommunityStartInvalidResult') `
+      -InnerException $null)
+  }
   $powershell = (Get-Command powershell.exe -ErrorAction Stop).Source
   $argumentLine = '-NoProfile -STA -WindowStyle Hidden -ExecutionPolicy RemoteSigned -File ' +
     (ConvertTo-DreamSkinProcessArgument -Value $startScript) + ' -RestartExisting' +
     ' -RequireUnpaused -OperationLockTimeoutMilliseconds ' +
-    "$OperationLockTimeoutMilliseconds"
-  $startProcess = Start-Process -FilePath $powershell -ArgumentList $argumentLine `
-    -WindowStyle Hidden -PassThru
-  if (-not $startProcess.WaitForExit($OperationLockTimeoutMilliseconds)) {
-    try { Stop-Process -InputObject $startProcess -Force -ErrorAction SilentlyContinue } catch {}
-    [void]$startProcess.WaitForExit(15000)
-    throw "Dream Skin start verification did not finish within $OperationLockTimeoutMilliseconds ms."
-  }
-  if ($startProcess.ExitCode -ne 0) {
-    throw "Dream Skin could not start and visibly verify the active theme (exit code $($startProcess.ExitCode))."
+    "$OperationLockTimeoutMilliseconds" + ' -ResultToken ' + $resultToken
+  $startProcess = $null
+  $childExited = $false
+  try {
+    $startProcess = Start-Process -FilePath $powershell -ArgumentList $argumentLine `
+      -WindowStyle Hidden -PassThru
+    $childCompletionGraceMilliseconds = 300000
+    $childCompletionTimeoutMilliseconds = [int](
+      $OperationLockTimeoutMilliseconds + $childCompletionGraceMilliseconds
+    )
+    if (-not $startProcess.WaitForExit($childCompletionTimeoutMilliseconds)) {
+      # The child may still own the operation mutex and be inside its bounded
+      # rollback. Killing it here would bypass every catch/finally block. Leave
+      # it running and preserve both theme states for a later verified action.
+      throw (New-DreamSkinCommunityStartStateException `
+        -Message (Get-DreamSkinCommunityText -Key 'CommunityStartTimedOut') `
+        -StillRunning -InnerException $null)
+    }
+    $childExited = $true
+    try {
+      $result = Read-DreamSkinStartResult -StateRoot $stateRoot -Token $resultToken
+    } catch {
+      throw (New-DreamSkinCommunityStartStateException `
+        -Message (Get-DreamSkinCommunityText -Key 'CommunityStartInvalidResult') `
+        -InnerException $_.Exception)
+    }
+    $coherentSuccess = $startProcess.ExitCode -eq 0 -and "$($result.outcome)" -ceq 'success'
+    $coherentFailure = $startProcess.ExitCode -ne 0 -and "$($result.outcome)" -ceq 'failure'
+    if (-not ($coherentSuccess -or $coherentFailure)) {
+      throw (New-DreamSkinCommunityStartStateException `
+        -Message (Get-DreamSkinCommunityText -Key 'CommunityStartInvalidResult') `
+        -InnerException $null)
+    }
+    if ($coherentFailure) {
+      $message = Get-DreamSkinCommunityStartFailureMessage `
+        -Category "$($result.category)" -AppearanceRecovery "$($result.appearanceRecovery)"
+      $exception = [System.InvalidOperationException]::new($message)
+      $exception.Data['DreamSkinStartCategory'] = "$($result.category)"
+      $exception.Data['DreamSkinAppearanceRecovery'] = "$($result.appearanceRecovery)"
+      if ("$($result.appearanceRecovery)" -in @('retained', 'blocked', 'preserved-rendered')) {
+        $exception.Data['DreamSkinStartStateUnconfirmed'] = $true
+      }
+      throw $exception
+    }
+  } finally {
+    if ($childExited -and (Test-Path -LiteralPath $resultPath)) {
+      Remove-Item -LiteralPath $resultPath -Force -ErrorAction SilentlyContinue
+    }
   }
 }
 
@@ -340,6 +445,10 @@ function Assert-DreamSkinCommunityActiveBaseline {
     [ValidateRange(1000, 120000)]
     [int]$RendererTimeoutMilliseconds = 30000
   )
+  $backupPath = Join-Path $StateRoot 'config.before-dream-skin.toml'
+  if (Test-DreamSkinPendingAppearanceTransaction -BackupPath $backupPath) {
+    throw 'One-click apply is blocked until the interrupted appearance transaction is recovered.'
+  }
   if (Test-DreamSkinPaused -StateRoot $StateRoot) {
     throw 'One-click apply requires an active, unpaused Dream Skin renderer.'
   }
@@ -347,7 +456,11 @@ function Assert-DreamSkinCommunityActiveBaseline {
     -ThemeDirectory $Paths.Active
   $session = Get-DreamSkinLiveSessionContext -StateRoot $StateRoot
   if ($null -eq $session) {
-    throw 'One-click apply requires an existing verified Dream Skin session.'
+    $exception = [System.InvalidOperationException]::new(
+      'One-click apply requires an existing verified Dream Skin session.'
+    )
+    $exception.Data['DreamSkinBaselineCategory'] = 'session-unavailable'
+    throw $exception
   }
   if (-not (Test-DreamSkinPathEqual -Left $session.Paths.Active -Right $Paths.Active)) {
     throw 'The active Dream Skin session does not use the selected theme directory.'
@@ -372,6 +485,59 @@ function Assert-DreamSkinCommunityActiveBaseline {
     throw 'The selected theme changed during baseline renderer verification.'
   }
   return [pscustomobject]@{ ContentFingerprint = $verifiedFingerprint }
+}
+
+function Ensure-DreamSkinCommunityActiveBaseline {
+  param(
+    [Parameter(Mandatory = $true)][object]$Paths,
+    [Parameter(Mandatory = $true)][string]$StateRoot,
+    [ValidateRange(1000, 300000)]
+    [int]$OperationLockTimeoutMilliseconds = 180000
+  )
+  $baseline = $null
+  $baselineFingerprint = $null
+  $startRequired = $false
+  $operationLock = $null
+  try {
+    $operationLock = Enter-DreamSkinOperationLock
+    try {
+      $baseline = Assert-DreamSkinCommunityActiveBaseline -Paths $Paths `
+        -StateRoot $StateRoot
+    } catch {
+      if ("$($_.Exception.Data['DreamSkinBaselineCategory'])" -cne 'session-unavailable') {
+        throw
+      }
+      $startRequired = $true
+      $baselineFingerprint = Get-DreamSkinThemeRuntimeContentFingerprint `
+        -ThemeDirectory $Paths.Active
+    } finally {
+      Exit-DreamSkinOperationLock -Mutex $operationLock
+      $operationLock = $null
+    }
+  }
+  catch {
+    if ($null -ne $operationLock) {
+      try { Exit-DreamSkinOperationLock -Mutex $operationLock } catch {}
+    }
+    throw
+  }
+  if (-not $startRequired) { return $baseline }
+
+  Invoke-DreamSkinCommunityStartAndVerify `
+    -OperationLockTimeoutMilliseconds $OperationLockTimeoutMilliseconds
+
+  $operationLock = Enter-DreamSkinOperationLock `
+    -TimeoutMilliseconds $OperationLockTimeoutMilliseconds
+  try {
+    $verified = Assert-DreamSkinCommunityActiveBaseline -Paths $Paths `
+      -StateRoot $StateRoot
+    if ($verified.ContentFingerprint -cne $baselineFingerprint) {
+      throw 'The active theme changed while the verified Dream Skin baseline was being established.'
+    }
+    return $verified
+  } finally {
+    Exit-DreamSkinOperationLock -Mutex $operationLock
+  }
 }
 
 function Get-DreamSkinCommunityActiveState {
@@ -566,6 +732,16 @@ function Invoke-DreamSkinCommunityThemeTransaction {
       -OperationLockTimeoutMilliseconds $OperationLockTimeoutMilliseconds
   } catch {
     $startFailure = $_
+    $appearanceRecovery = "$($startFailure.Exception.Data['DreamSkinAppearanceRecovery'])"
+    $startStateUnconfirmed = [bool]$startFailure.Exception.Data['DreamSkinStartStateUnconfirmed'] -or
+      $appearanceRecovery -in @('retained', 'blocked', 'preserved-rendered')
+    if ($startStateUnconfirmed) {
+      throw (New-DreamSkinCommunityApplyException `
+        -Message ("The imported theme start state is unconfirmed and was preserved without " +
+          "rewriting active-theme files: $($startFailure.Exception.Message)") `
+        -Recovery 'Failed' -InnerException $startFailure.Exception `
+        -RollbackSnapshot $snapshotRoot -RollbackFingerprint $rollbackFingerprint)
+    }
     $superseded = $false
     $rollbackFailure = $null
     $rollbackLock = $null
@@ -658,7 +834,8 @@ function Invoke-DreamSkinCommunityThemeTransaction {
         -Recovery 'Superseded' -InnerException $startFailure.Exception)
     }
     throw (New-DreamSkinCommunityApplyException `
-      -Message 'The imported theme failed visible verification. The previous theme was reapplied and visibly verified.' `
+      -Message ("The imported theme failed visible verification: $($startFailure.Exception.Message) " +
+        'The previous theme was reapplied and visibly verified.') `
       -Recovery 'Verified' -InnerException $startFailure.Exception)
   }
 
@@ -711,6 +888,8 @@ function Invoke-DreamSkinCommunityApply {
     }
 
     $paths = Get-DreamSkinThemePaths -StateRoot $stateRoot
+    $null = Ensure-DreamSkinCommunityActiveBaseline -Paths $paths `
+      -StateRoot $stateRoot -OperationLockTimeoutMilliseconds 180000
     Ensure-DreamSkinManagedDirectory -Path $paths.Root -Root $paths.Root
     $workRoot = Join-Path $paths.Root ('.community-apply-' + [guid]::NewGuid().ToString('N'))
     Ensure-DreamSkinManagedDirectory -Path $workRoot -Root $paths.Root
@@ -782,6 +961,8 @@ function Invoke-DreamSkinCommunityApply {
   }
 }
 
+if ($FunctionsOnly) { return }
+
 $previousProtocol = [System.Net.ServicePointManager]::SecurityProtocol
 try {
   [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
@@ -797,24 +978,30 @@ try {
   $rollbackPath = "$($_.Exception.Data['DreamSkinRollbackPath'])"
   $workRootRetained = [bool]$_.Exception.Data['DreamSkinWorkRootRetained']
   $recoveryMessage = switch ($recovery) {
-    'Verified' { '新主题未能生效；此前主题已重新应用并完成可见渲染验证。' }
-    'Failed' { '新主题未能生效；此前主题的自动恢复或渲染验证未完成。请重新打开客户端检查。' }
-    'Superseded' { '检测到另一个换肤操作，客户端保留了较新的选择，没有覆盖它。' }
-    default { '新主题未写入已验证的活动状态。' }
+    'Verified' { Get-DreamSkinCommunityText -Key 'RecoveryVerified' }
+    'Failed' { Get-DreamSkinCommunityText -Key 'RecoveryFailed' }
+    'Superseded' { Get-DreamSkinCommunityText -Key 'RecoverySuperseded' }
+    default { Get-DreamSkinCommunityText -Key 'RecoveryUnconfirmed' }
   }
   $cleanupMessage = if ($workRootRetained) {
-    '恢复工作目录已保留，未自动删除。'
-  } else {
-    '下载临时文件已清理。'
+    Get-DreamSkinCommunityText -Key 'RecoveryWorkRetained'
+  } elseif ($null -ne $workRoot) {
+    Get-DreamSkinCommunityText -Key 'DownloadCleaned'
   }
   $rollbackMessage = if ($rollbackPath) {
-    "`r`n回滚快照：$rollbackPath"
+    Get-DreamSkinCommunityText -Key 'RollbackSnapshot' -FormatArguments @($rollbackPath)
   } else {
     ''
   }
+  $summary = @(
+    (Get-DreamSkinCommunityText -Key 'CommunityApplyFailed'),
+    $recoveryMessage
+  )
+  if ($cleanupMessage) { $summary += $cleanupMessage }
+  if ($rollbackMessage) { $summary += $rollbackMessage }
   Show-DreamSkinCommunityMessage -Kind Error -Message (
-    "一键换肤失败。$cleanupMessage$recoveryMessage`r`n`r`n" +
-      $_.Exception.Message + $rollbackMessage
+    (($summary -join [Environment]::NewLine) + [Environment]::NewLine +
+      [Environment]::NewLine + $_.Exception.Message)
   )
   [Console]::Error.WriteLine($_.Exception.Message)
   if ($recovery -ceq 'Verified') { exit 20 }

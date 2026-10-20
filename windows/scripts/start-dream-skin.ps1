@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
   [int]$Port = 9335,
   [switch]$RestartExisting,
@@ -6,26 +6,124 @@ param(
   [string]$ProfilePath,
   [switch]$ForegroundInjector,
   [ValidateRange(0, 300000)][int]$OperationLockTimeoutMilliseconds = 0,
-  [switch]$RequireUnpaused
+  [switch]$RequireUnpaused,
+  [string]$SavedThemeDirectory,
+  [ValidatePattern('^[a-f0-9]{32}$')][string]$ResultToken
 )
 
 $ErrorActionPreference = 'Stop'
 $PortExplicit = $PSBoundParameters.ContainsKey('Port')
+$ProfilePathExplicit = $PSBoundParameters.ContainsKey('ProfilePath') -and [bool]$ProfilePath
 $Injector = Join-Path $PSScriptRoot 'injector.mjs'
 . (Join-Path $PSScriptRoot 'common-windows.ps1')
 . (Join-Path $PSScriptRoot 'theme-windows.ps1')
+. (Join-Path $PSScriptRoot 'localization-windows.ps1')
 
-$operationLock = Enter-DreamSkinOperationLock `
-  -TimeoutMilliseconds $OperationLockTimeoutMilliseconds
+function Invoke-DreamSkinStartupAppearanceRecovery {
+  param(
+    [AllowNull()][object]$Transaction,
+    [Parameter(Mandatory = $true)][string]$ConfigPath,
+    [Parameter(Mandatory = $true)][string]$BackupPath
+  )
+  if ($null -eq $Transaction) { return 'not-needed' }
+  try {
+    $result = Restore-DreamSkinManagedAppearanceSnapshot `
+      -ConfigPath $ConfigPath -BackupPath $BackupPath -Transaction $Transaction
+    if ($result.ConflictedKeys.Count -gt 0 -or
+      "$($result.MarkerStatus)" -ceq 'conflict-preserved') {
+      Write-Warning 'Startup appearance recovery preserved newer user changes instead of overwriting them.'
+      return 'conflict-preserved'
+    }
+    return 'restored'
+  } catch {
+    Write-Warning 'Startup appearance recovery could not commit safely; the current config and ownership marker were preserved.'
+    return 'blocked'
+  }
+}
+
+function Test-DreamSkinRenderedVerificationOutput {
+  param([AllowEmptyCollection()][object[]]$Output)
+  try {
+    $payload = ($Output -join "`n") | ConvertFrom-Json -ErrorAction Stop
+    foreach ($target in @($payload.targets)) {
+      $result = $target.result
+      $readiness = $result.readiness
+      if ($result.installed -is [bool] -and [bool]$result.installed -and
+        $result.stylePresent -is [bool] -and [bool]$result.stylePresent -and
+        $readiness.documentPass -is [bool] -and [bool]$readiness.documentPass -and
+        $readiness.viewportPass -is [bool] -and [bool]$readiness.viewportPass -and
+        $readiness.structurePass -is [bool] -and [bool]$readiness.structurePass) {
+        return $true
+      }
+    }
+  } catch {
+    return $false
+  }
+  return $false
+}
+
+function Test-DreamSkinHiddenVerificationOutput {
+  param([AllowEmptyCollection()][object[]]$Output)
+  try {
+    $payload = ($Output -join "`n") | ConvertFrom-Json -ErrorAction Stop
+    $targets = @($payload.targets)
+    if ($targets.Count -eq 0) { return $false }
+    foreach ($target in $targets) {
+      $result = $target.result
+      # Unknown, failed, mixed or visible targets never authorize recovery.
+      if ($result.documentHidden -isnot [bool] -or -not $result.documentHidden -or
+        $result.documentVisibility -cne 'hidden' -or
+        $result.readiness.documentPass -isnot [bool] -or $result.readiness.documentPass) {
+        return $false
+      }
+    }
+    return $true
+  } catch { return $false }
+}
+
+function Restore-DreamSkinStartupThemeSelection {
+  param([object]$Transaction, [object]$Paths, [string]$StateRoot)
+  # Caller holds the operation lock. External changes must still win.
+  $current = Get-DreamSkinThemeRuntimeContentFingerprint -ThemeDirectory $Paths.Active
+  if ($current -cne $Transaction.SelectedFingerprint) { return 'superseded' }
+  if ((Get-DreamSkinThemeRuntimeContentFingerprint -ThemeDirectory $Transaction.Snapshot) -cne
+    $Transaction.PreviousFingerprint) { throw 'The rollback snapshot changed; current theme was preserved.' }
+  $null = Restore-DreamSkinActiveThemeSnapshot -SnapshotDirectory $Transaction.Snapshot `
+    -StateRoot $StateRoot -ExpectedContentFingerprint $Transaction.PreviousFingerprint
+  return 'restored'
+}
+
+$StateRoot = Join-Path $env:LOCALAPPDATA 'CodexDreamSkin'
+$operationLock = $null
+$startFailureCategory = 'internal-start-failure'
+$appearanceTransaction = $null
+$appearanceRecovery = 'not-needed'
+$themeSelectionTransaction = $null
 try {
+  $operationLock = Enter-DreamSkinOperationLock `
+    -TimeoutMilliseconds $OperationLockTimeoutMilliseconds
   Assert-DreamSkinPort -Port $Port
+  if ($SavedThemeDirectory -and $ForegroundInjector) {
+    throw 'Saved-theme selection requires the verified background startup operation.'
+  }
   if ($ProfilePath) { $ProfilePath = [System.IO.Path]::GetFullPath($ProfilePath) }
   $node = Get-DreamSkinNodeRuntime
   $currentCodex = Get-DreamSkinCodexInstall
   $codex = $currentCodex
-  $StateRoot = Join-Path $env:LOCALAPPDATA 'CodexDreamSkin'
+  $language = Resolve-DreamSkinLanguage -StateRoot $StateRoot
   $themePaths = Get-DreamSkinThemePaths -StateRoot $StateRoot
   Ensure-DreamSkinManagedDirectory -Path $themePaths.Root -Root $themePaths.Root
+  $configPaths = Resolve-DreamSkinConfigPaths -StateRoot $StateRoot -BindBackup
+  $ConfigPath = $configPaths.ConfigPath
+  $BackupPath = $configPaths.BackupPath
+  if (-not $ProfilePathExplicit) {
+    # Chromium 136+ ignores remote-debugging switches for its default data
+    # directory. Keep Dream Skin on a separate persistent profile so current
+    # Codex builds can expose CDP without weakening or modifying the official
+    # profile. A caller-provided path remains an explicit advanced override.
+    $ProfilePath = [System.IO.Path]::GetFullPath((Join-Path $StateRoot 'cdp-profile'))
+    Ensure-DreamSkinManagedDirectory -Path $ProfilePath -Root $StateRoot
+  }
   $StatePath = Join-Path $StateRoot 'state.json'
   $StdoutPath = Join-Path $StateRoot 'injector.log'
   $StderrPath = Join-Path $StateRoot 'injector-error.log'
@@ -33,6 +131,7 @@ try {
   $themePaths = Initialize-DreamSkinThemeStore -SkillRoot (Split-Path -Parent $PSScriptRoot) -StateRoot $StateRoot
   $pauseWasSet = Test-DreamSkinPaused -StateRoot $StateRoot
   if ($RequireUnpaused -and $pauseWasSet) {
+    $startFailureCategory = 'superseded'
     throw 'A newer pause request superseded this theme apply before renderer verification.'
   }
 
@@ -55,7 +154,7 @@ try {
     }
   }
 
-  $currentProcesses = Get-DreamSkinCodexProcesses -Codex $currentCodex
+  $currentProcesses = @(Get-DreamSkinCodexProcesses -Codex $currentCodex)
   $codexToStop = $currentCodex
   $cdpIdentity = Get-DreamSkinVerifiedCdpIdentity -Port $Port -Codex $currentCodex
   if ($null -eq $cdpIdentity) {
@@ -93,24 +192,59 @@ try {
       }
     }
   }
+  $pendingAppearanceTransaction = Test-DreamSkinPendingAppearanceTransaction `
+    -BackupPath $BackupPath
+  if ($pendingAppearanceTransaction) {
+    # A previous process ended before it could commit or recover appearance.
+    # Do not reuse its live session: the locked restart path closes Codex first,
+    # then Install-DreamSkinBaseTheme performs the durable three-way recovery.
+    $appearanceRecovery = 'blocked'
+    $cdpIdentity = $null
+  }
   $debugReady = $null -ne $cdpIdentity
-  $codexProcesses = if (Test-DreamSkinPathEqual -Left $codexToStop.Executable -Right $currentCodex.Executable) {
+  $hiddenSessionIdentity = $null
+  if ($PromptRestart -and -not $RestartExisting -and $debugReady) {
+    $visibility = Invoke-DreamSkinNative -FilePath $node.Path -ArgumentList @(
+      $Injector, '--verify', '--port', "$Port", '--browser-id', $cdpIdentity.BrowserId,
+      '--theme-dir', $themePaths.Active, '--timeout-ms', '5000') -SeparateStderr
+    if (Test-DreamSkinHiddenVerificationOutput -Output $visibility.Output) {
+      $hiddenSessionIdentity = $cdpIdentity
+      $debugReady = $false
+    }
+  }
+  # Explicit restart must also replace a still-live CDP session. Closing the
+  # last Owl window leaves that session alive, so treating the listener as a
+  # reason to ignore -RestartExisting strands the renderer in hidden state.
+  if ($RestartExisting -and $debugReady) {
+    $cdpIdentity = $null
+    $debugReady = $false
+  }
+  $codexProcesses = @(if (Test-DreamSkinPathEqual -Left $codexToStop.Executable -Right $currentCodex.Executable) {
     $currentProcesses
   } else {
     Get-DreamSkinCodexProcesses -Codex $codexToStop
-  }
+  })
   $closedExistingCodex = $false
   if (-not $debugReady -and $codexProcesses.Count -gt 0) {
     $restartAuthorized = [bool]$RestartExisting
     if (-not $restartAuthorized -and $PromptRestart) {
-      $restartAuthorized = Confirm-DreamSkinRestart -Message 'Codex must restart once to enable Dream Skin. Unsaved input may be lost. Restart now?'
+      $restartAuthorized = Confirm-DreamSkinRestart -Message `
+        (Get-DreamSkinText -Key 'RestartPrompt' -Language $language)
       if (-not $restartAuthorized) {
-        Write-Host 'Dream Skin launch was cancelled; Codex was not changed.'
+        Write-Host (Get-DreamSkinText -Key 'LaunchCancelled' -Language $language)
         exit 0
       }
     }
     if (-not $restartAuthorized) {
       throw 'Codex is open without a verified Dream Skin CDP endpoint. Close it first or explicitly use -RestartExisting.'
+    }
+    if ($null -ne $hiddenSessionIdentity) {
+      $latestIdentity = Get-DreamSkinVerifiedCdpIdentity -Port $Port -Codex $codexToStop
+      if ($null -eq $latestIdentity -or
+        $latestIdentity.BrowserId -cne $hiddenSessionIdentity.BrowserId) {
+        throw 'The hidden Codex session changed during restart confirmation; no process was stopped.'
+      }
+      $cdpIdentity = $null
     }
     Stop-DreamSkinCodex -Codex $codexToStop -AllowForce
     $closedExistingCodex = $true
@@ -125,29 +259,77 @@ try {
   # complete skin even though verification did not pass overall.
   $skinLooksRendered = $false
   try {
+    if ($pendingAppearanceTransaction) {
+      $startFailureCategory = 'state-reconciliation-failed'
+      try {
+        $pendingRecovery = Resolve-DreamSkinPendingAppearanceTransaction `
+          -ConfigPath $ConfigPath -BackupPath $BackupPath
+        if ($null -ne $pendingRecovery -and
+          ($pendingRecovery.ConflictedKeys.Count -gt 0 -or
+            "$($pendingRecovery.MarkerStatus)" -ceq 'conflict-preserved')) {
+          Write-Warning 'Interrupted appearance recovery preserved newer user changes.'
+        }
+        $pendingAppearanceTransaction = $false
+      } catch {
+        $appearanceRecovery = 'blocked'
+        throw 'Interrupted startup appearance could not be recovered safely; config was preserved.'
+      }
+    }
+    if ($SavedThemeDirectory) {
+      # Selection belongs to this locked child, after consent and before launch.
+      # Reuse the community apply snapshot contract without its UI entry point.
+      . (Join-Path (Split-Path -Parent $Injector) 'apply-community-theme.ps1') -FunctionsOnly
+      $snapshot = Join-Path $StateRoot ('.tray-apply-' + [guid]::NewGuid().ToString('N'))
+      $previousFingerprint = Get-DreamSkinThemeRuntimeContentFingerprint -ThemeDirectory $themePaths.Active
+      $null = Copy-DreamSkinActiveThemeSnapshot -Paths $themePaths -Destination $snapshot
+      if ((Get-DreamSkinThemeRuntimeContentFingerprint -ThemeDirectory $snapshot) -cne $previousFingerprint) {
+        throw 'The active theme changed while its rollback snapshot was being copied.'
+      }
+      try {
+        $null = Use-DreamSkinSavedTheme -ThemeDirectory $SavedThemeDirectory -StateRoot $StateRoot
+        $selectedFingerprint = Get-DreamSkinThemeRuntimeContentFingerprint -ThemeDirectory $themePaths.Active
+      } catch {
+        # A partial write is still ours: no lock has been released since snapshot.
+        $selectionError = $_
+        $null = Restore-DreamSkinActiveThemeSnapshot -SnapshotDirectory $snapshot `
+          -StateRoot $StateRoot -ExpectedContentFingerprint $previousFingerprint
+        Remove-DreamSkinManagedDirectoryVerified -Path $snapshot -Root $StateRoot
+        throw $selectionError
+      }
+      $themeSelectionTransaction = [pscustomobject]@{
+        Snapshot = $snapshot; PreviousFingerprint = $previousFingerprint
+        SelectedFingerprint = $selectedFingerprint
+      }
+    }
     if ($null -eq (Get-DreamSkinVerifiedCdpIdentity -Port $Port -Codex $codex)) {
       # Codex is closed on this path; sync the appearanceTheme pin to the
       # active theme before launching (config writes race the app while it runs).
       try {
-        Install-DreamSkinBaseTheme -ConfigPath (Join-Path $HOME '.codex\config.toml') `
-          -BackupPath (Join-Path $StateRoot 'config.before-dream-skin.toml') `
-          -AppearanceTheme (Get-DreamSkinActiveThemeAppearance -ThemeDirectory $themePaths.Active)
+        $appearanceTransaction = Install-DreamSkinBaseTheme `
+          -ConfigPath $ConfigPath -BackupPath $BackupPath `
+          -AppearanceTheme (Get-DreamSkinActiveThemeAppearance -ThemeDirectory $themePaths.Active) `
+          -PassThruTransaction
+        if ($null -ne $appearanceTransaction) { $appearanceRecovery = 'retained' }
       } catch {
+        $appearanceTransaction = $null
+        $appearanceRecovery = 'not-needed'
         Write-Warning "Could not sync Codex appearanceTheme to the active theme: $($_.Exception.Message)"
       }
+      $startFailureCategory = 'port-unavailable'
       if (-not (Test-DreamSkinPortAvailable -Port $Port)) {
         if ($PortExplicit) { throw "Port $Port is already occupied by an unverified listener. Choose another port." }
         $Port = Select-DreamSkinPort -PreferredPort $Port
       }
       $arguments = @('--remote-debugging-address=127.0.0.1', "--remote-debugging-port=$Port")
-      if ($ProfilePath) {
+      if ($ProfilePathExplicit) {
         New-Item -ItemType Directory -Force -Path $ProfilePath | Out-Null
-        $arguments += "--user-data-dir=$ProfilePath"
       }
+      $arguments += "--user-data-dir=$ProfilePath"
       $debugLaunchAttempted = $true
       $debugLaunchBaselineProcessIds = @(
         Get-DreamSkinCodexProcesses -Codex $codex | ForEach-Object { [int]$_.ProcessId }
       )
+      $startFailureCategory = 'cdp-launch-failed'
       $debugLaunch = Start-DreamSkinCodexForDebugging -Codex $codex -Arguments $arguments `
         -Port $Port -PreserveProcessIds $debugLaunchBaselineProcessIds
       $launchedWithCdp = $true
@@ -156,6 +338,7 @@ try {
       }
     }
 
+    $startFailureCategory = 'cdp-endpoint-unavailable'
     $deadline = (Get-Date).AddSeconds(45)
     $cdpIdentity = Get-DreamSkinVerifiedCdpIdentity -Port $Port -Codex $codex
     while ($null -eq $cdpIdentity) {
@@ -183,8 +366,17 @@ try {
         Write-Warning 'Launch rollback could not fully close the failed CDP session.'
       }
     }
-    if (($closedExistingCodex -or $debugLaunchAttempted) -and
-      (Get-DreamSkinCodexProcesses -Codex $codex).Count -eq 0) {
+    $failedLaunchClosed = (Get-DreamSkinCodexProcesses -Codex $codex).Count -eq 0
+    if ($null -ne $appearanceTransaction) {
+      if ($failedLaunchClosed) {
+        $appearanceRecovery = Invoke-DreamSkinStartupAppearanceRecovery `
+          -Transaction $appearanceTransaction -ConfigPath $ConfigPath -BackupPath $BackupPath
+      } else {
+        $appearanceRecovery = 'blocked'
+        Write-Warning 'Startup appearance recovery was blocked because the failed Codex process could not be confirmed closed.'
+      }
+    }
+    if (($closedExistingCodex -or $debugLaunchAttempted) -and $failedLaunchClosed) {
       if ($debugLaunchAttempted) {
         Write-Warning 'Dream Skin launch failed; reopening Codex without a debugging port.'
       }
@@ -195,53 +387,156 @@ try {
     throw $launchError
   }
 
+  $startFailureCategory = 'state-reconciliation-failed'
+  $pauseCleared = $false
   try {
     $recordedInjectorStopped = Stop-DreamSkinRecordedInjector -State $previousState
     if (-not $recordedInjectorStopped) {
       $staleStatePath = Archive-DreamSkinStateFile -Path $StatePath
       Write-Warning "Archived stale Dream Skin state at $staleStatePath"
     }
+    # Keep a paused, already-running watcher paused until all state checks and
+    # restart consent have succeeded. A cancelled prompt stays side-effect free.
+    Set-DreamSkinPaused -Paused $false -StateRoot $StateRoot | Out-Null
+    $pauseCleared = $true
   } catch {
     if ($launchedWithCdp) {
+      $stateRollbackClosed = $false
       try {
         Stop-DreamSkinCodex -Codex $codex -AllowForce
-        $null = Start-DreamSkinCodex -Codex $codex
+        $stateRollbackClosed = (Get-DreamSkinCodexProcesses -Codex $codex).Count -eq 0
       } catch {
-        Write-Warning 'State validation rollback could not fully restart Codex; close Codex to ensure its CDP port is closed.'
+        $stateRollbackClosed = $false
+      }
+      if ($stateRollbackClosed) {
+        $appearanceRecovery = Invoke-DreamSkinStartupAppearanceRecovery `
+          -Transaction $appearanceTransaction -ConfigPath $ConfigPath -BackupPath $BackupPath
+        try { $null = Start-DreamSkinCodex -Codex $codex } catch {
+          Write-Warning 'State validation rollback could not reopen Codex automatically.'
+        }
+      } else {
+        if ($null -ne $appearanceTransaction) { $appearanceRecovery = 'blocked' }
+        Write-Warning 'State validation rollback could not fully close Codex; close Codex to ensure its CDP port is closed.'
+      }
+    }
+    if ($pauseWasSet) {
+      try { Set-DreamSkinPaused -Paused $true -StateRoot $StateRoot | Out-Null } catch {
+        Write-Warning 'State validation rollback could not restore the existing paused state.'
       }
     }
     throw
   }
 
-  # Keep a paused, already-running watcher paused until all state checks and any
-  # restart consent have succeeded.  A cancelled prompt must be side-effect free.
-  Set-DreamSkinPaused -Paused $false -StateRoot $StateRoot | Out-Null
-  $pauseCleared = $true
-
   if ($ForegroundInjector) {
+    $startFailureCategory = 'injector-start-failed'
+    $foregroundStopwatch = $null
+    $foregroundSuperseded = $true
+    $foregroundLockReleased = $false
+    $foregroundBaselinePause = $null
+    $foregroundBaselineFingerprint = $null
     try {
       Remove-Item -LiteralPath $StatePath -Force -ErrorAction SilentlyContinue
+      $foregroundBaselinePause = [bool](Test-DreamSkinPaused -StateRoot $StateRoot)
+      $foregroundBaselineFingerprint = Get-DreamSkinThemeRuntimeContentFingerprint `
+        -ThemeDirectory $themePaths.Active
+      if ($null -ne $appearanceTransaction) {
+        Complete-DreamSkinAppearanceTransaction `
+          -BackupPath $BackupPath -Transaction $appearanceTransaction
+      }
       Exit-DreamSkinOperationLock -Mutex $operationLock
       $operationLock = $null
+      $foregroundLockReleased = $true
+      $foregroundStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
       & $node.Path $Injector --watch --port $Port --browser-id $cdpIdentity.BrowserId `
         --theme-dir $themePaths.Active --pause-file $themePaths.PauseFile
       $foregroundExitCode = $LASTEXITCODE
-      if ($foregroundExitCode -ne 0 -and $pauseWasSet) {
-        Set-DreamSkinPaused -Paused $true -StateRoot $StateRoot | Out-Null
+      if ($foregroundExitCode -ne 0) {
+        throw "The foreground injector exited during startup (exit code $foregroundExitCode)."
       }
-      exit $foregroundExitCode
+      if ($ResultToken) {
+        Write-DreamSkinStartResult -StateRoot $StateRoot -Token $ResultToken `
+          -Outcome 'success' -Category 'none' -AppearanceRecovery $appearanceRecovery
+      }
+      exit 0
     } catch {
-      if ($pauseWasSet) {
+      $foregroundError = $_
+      $foregroundImmediateFailure = $null -eq $foregroundStopwatch -or
+        $foregroundStopwatch.Elapsed.TotalSeconds -lt 10
+      if (-not $foregroundImmediateFailure) {
+        Write-Warning 'The foreground injector ended after its startup window; current Codex and appearance state were preserved.'
+        throw $foregroundError
+      }
+      if ($null -eq $operationLock) {
+        try {
+          $operationLock = Enter-DreamSkinOperationLock `
+            -TimeoutMilliseconds $OperationLockTimeoutMilliseconds
+        } catch {
+          if ($null -ne $appearanceTransaction) { $appearanceRecovery = 'blocked' }
+          Write-Warning 'Foreground startup recovery could not reacquire the operation lock.'
+        }
+      }
+      if ($null -ne $operationLock) {
+        if (-not $foregroundLockReleased) {
+          $foregroundSuperseded = $false
+        } else {
+          try {
+            $foregroundCurrentPause = [bool](Test-DreamSkinPaused -StateRoot $StateRoot)
+            $foregroundCurrentFingerprint = Get-DreamSkinThemeRuntimeContentFingerprint `
+              -ThemeDirectory $themePaths.Active
+            $foregroundSuperseded = $null -ne (Read-DreamSkinState -Path $StatePath) -or
+              $foregroundCurrentPause -ne $foregroundBaselinePause -or
+              "$foregroundCurrentFingerprint" -cne "$foregroundBaselineFingerprint"
+          } catch {
+            $foregroundSuperseded = $true
+          }
+        }
+      }
+      if ($launchedWithCdp -and $null -ne $operationLock) {
+        $foregroundClosed = $false
+        try {
+          if (-not $foregroundSuperseded) {
+            $foregroundProcesses = @(Get-DreamSkinCodexProcesses -Codex $codex)
+            if ($foregroundProcesses.Count -eq 0) {
+              $foregroundClosed = $true
+            } else {
+              $foregroundIdentity = Get-DreamSkinVerifiedCdpIdentity -Port $Port -Codex $codex
+              if ($null -ne $foregroundIdentity -and
+                "$($foregroundIdentity.BrowserId)" -ceq "$($cdpIdentity.BrowserId)") {
+                Stop-DreamSkinCodex -Codex $codex -AllowForce
+                $foregroundClosed = (Get-DreamSkinCodexProcesses -Codex $codex).Count -eq 0
+              }
+            }
+          }
+        } catch {
+          $foregroundClosed = $false
+        }
+        if ($foregroundClosed) {
+          $appearanceRecovery = Invoke-DreamSkinStartupAppearanceRecovery `
+            -Transaction $appearanceTransaction -ConfigPath $ConfigPath -BackupPath $BackupPath
+          try { $null = Start-DreamSkinCodex -Codex $codex } catch {
+            Write-Warning 'Foreground startup recovery could not reopen Codex automatically.'
+          }
+        } else {
+          if ($null -ne $appearanceTransaction) { $appearanceRecovery = 'blocked' }
+          if ($foregroundSuperseded) {
+            Write-Warning 'Foreground startup recovery was superseded by a newer managed session.'
+          } else {
+            Write-Warning 'Foreground startup recovery could not confirm that its Codex session was closed.'
+          }
+        }
+      }
+      if ($pauseWasSet -and $null -ne $operationLock -and -not $foregroundSuperseded) {
         try { Set-DreamSkinPaused -Paused $true -StateRoot $StateRoot | Out-Null } catch {
           Write-Warning 'Foreground startup rollback could not restore the existing paused state.'
         }
       }
-      throw
+      throw $foregroundError
     }
   }
 
   $state = $null
   $daemon = $null
+  $startFailureCategory = 'injector-start-failed'
   try {
     $injectorArgs = @((ConvertTo-DreamSkinProcessArgument -Value $Injector), '--watch', '--port', "$Port",
       '--browser-id', $cdpIdentity.BrowserId, '--theme-dir',
@@ -276,6 +571,7 @@ try {
     }
     Write-DreamSkinState -Path $StatePath -State $state
 
+    $startFailureCategory = 'renderer-verification-failed'
     # The one-shot verify races Codex's first paint: on a slow machine the
     # shell markers are not rendered yet when the daemon has barely started,
     # and a single early miss used to tear the whole startup down.  The
@@ -286,8 +582,8 @@ try {
       $verify = Invoke-DreamSkinNative -FilePath $node.Path -ArgumentList @(
         $Injector, '--verify', '--port', "$Port",
         '--browser-id', $cdpIdentity.BrowserId, '--theme-dir', $themePaths.Active,
-        '--timeout-ms', '30000')
-      Write-DreamSkinUtf8FileAtomically -Path $VerifyPath -Content (($verify.Output -join "`r`n") + "`r`n")
+        '--timeout-ms', '30000') -SeparateStderr
+      Write-DreamSkinUtf8FileAtomically -Path $VerifyPath -Content ((($verify.Output + $verify.ErrorOutput) -join "`r`n") + "`r`n")
       if ($verify.ExitCode -eq 0) { break }
       # A verify can fail while the theme is demonstrably on screen: the
       # renderer reports the document visible, the viewport sized and the shell
@@ -295,15 +591,10 @@ try {
       # builds never resolve -- comes back false.  Killing Codex in that state
       # destroys a working skin the user is looking at, so remember it and let
       # the rollback below leave the app alone (#267).
-      $skinLooksRendered = $false
-      try {
-        $verifyJson = ($verify.Output -join "`n") | ConvertFrom-Json -ErrorAction Stop
-        $readiness = $verifyJson.readiness
-        $skinLooksRendered = [bool]$verifyJson.installed -and [bool]$verifyJson.stylePresent -and
-          [bool]$readiness.documentPass -and [bool]$readiness.viewportPass -and
-          [bool]$readiness.structurePass
-      } catch {
-        $skinLooksRendered = $false
+      if (Test-DreamSkinRenderedVerificationOutput -Output $verify.Output) {
+        # Latch positive evidence. A later transient or malformed probe must not
+        # erase proof that a complete skin was already visible on screen.
+        $skinLooksRendered = $true
       }
       if (-not $forceInjectedAfterVerifyFailure) {
         $forceInjectedAfterVerifyFailure = $true
@@ -311,15 +602,22 @@ try {
         $once = Invoke-DreamSkinNative -FilePath $node.Path -ArgumentList @(
           $Injector, '--once', '--port', "$Port",
           '--browser-id', $cdpIdentity.BrowserId, '--theme-dir', $themePaths.Active,
-          '--timeout-ms', '15000')
+          '--timeout-ms', '15000') -SeparateStderr
         Write-DreamSkinUtf8FileAtomically -Path $VerifyPath -Content (
-          (($verify.Output + $once.Output) -join "`r`n") + "`r`n"
+          (($verify.Output + $verify.ErrorOutput + $once.Output + $once.ErrorOutput) -join "`r`n") + "`r`n"
         )
+        if (Test-DreamSkinRenderedVerificationOutput -Output $once.Output) {
+          $skinLooksRendered = $true
+        }
         if ($once.ExitCode -eq 0) { break }
       }
       if ($daemon.HasExited) { throw "The injector exited during startup. See $StderrPath" }
       if ((Get-Date) -ge $verifyDeadline) { throw "Dream Skin verification failed. See $VerifyPath" }
       Start-Sleep -Seconds 3
+    }
+    if ($null -ne $appearanceTransaction) {
+      Complete-DreamSkinAppearanceTransaction `
+        -BackupPath $BackupPath -Transaction $appearanceTransaction
     }
   } catch {
     $startupError = $_
@@ -342,7 +640,7 @@ try {
         Write-Warning "The rollback injector has not exited yet: PID $($daemon.Id). State was preserved so the next start can reconcile it."
       }
     }
-    if ($injectorStopped -and -not $launchedWithCdp) {
+    if ($injectorStopped -and -not $launchedWithCdp -and -not $skinLooksRendered) {
       try {
         $rollbackIdentity = Get-DreamSkinVerifiedCdpIdentity -Port $Port -Codex $codex
         if ($null -ne $rollbackIdentity -and $rollbackIdentity.BrowserId -ceq $cdpIdentity.BrowserId) {
@@ -357,19 +655,72 @@ try {
     }
     if ($injectorStopped) { Remove-Item -LiteralPath $StatePath -Force -ErrorAction SilentlyContinue }
     if ($launchedWithCdp -and -not $skinLooksRendered) {
+      $rendererRollbackClosed = $false
       try {
         Stop-DreamSkinCodex -Codex $codex -AllowForce
-        $null = Start-DreamSkinCodex -Codex $codex
+        $rendererRollbackClosed = (Get-DreamSkinCodexProcesses -Codex $codex).Count -eq 0
       } catch {
-        Write-Warning 'Startup rollback could not fully restart Codex; close Codex to ensure its CDP port is closed.'
+        $rendererRollbackClosed = $false
       }
-    } elseif ($launchedWithCdp) {
+      if ($rendererRollbackClosed) {
+        $appearanceRecovery = Invoke-DreamSkinStartupAppearanceRecovery `
+          -Transaction $appearanceTransaction -ConfigPath $ConfigPath -BackupPath $BackupPath
+        try { $null = Start-DreamSkinCodex -Codex $codex } catch {
+          Write-Warning 'Startup rollback could not reopen Codex automatically.'
+        }
+      } else {
+        if ($null -ne $appearanceTransaction) { $appearanceRecovery = 'blocked' }
+        Write-Warning 'Startup rollback could not fully close Codex; close Codex to ensure its CDP port is closed.'
+      }
+    } elseif ($skinLooksRendered -and $ResultToken -and $launchedWithCdp -and
+      $null -ne $appearanceTransaction) {
+      # One-click apply has a parent theme-file transaction. Leaving the new
+      # appearance/session alive would make any parent file rollback produce a
+      # mixed theme. Close only the still-matching CDP session, recover this
+      # appearance transaction, and reopen ordinary Codex before reporting.
+      $renderedRollbackClosed = $false
+      try {
+        $renderedProcesses = @(Get-DreamSkinCodexProcesses -Codex $codex)
+        if ($renderedProcesses.Count -eq 0) {
+          $renderedRollbackClosed = $true
+        } else {
+          $renderedIdentity = Get-DreamSkinVerifiedCdpIdentity -Port $Port -Codex $codex
+          if ($null -ne $renderedIdentity -and
+            "$($renderedIdentity.BrowserId)" -ceq "$($cdpIdentity.BrowserId)") {
+            Stop-DreamSkinCodex -Codex $codex -AllowForce
+            $renderedRollbackClosed = (Get-DreamSkinCodexProcesses -Codex $codex).Count -eq 0
+          }
+        }
+      } catch {
+        $renderedRollbackClosed = $false
+      }
+      if ($renderedRollbackClosed) {
+        $appearanceRecovery = Invoke-DreamSkinStartupAppearanceRecovery `
+          -Transaction $appearanceTransaction -ConfigPath $ConfigPath -BackupPath $BackupPath
+        try { $null = Start-DreamSkinCodex -Codex $codex } catch {
+          Write-Warning 'Rendered-session rollback could not reopen Codex automatically.'
+        }
+      } else {
+        $appearanceRecovery = 'blocked'
+        Write-Warning 'Rendered-session rollback could not confirm the exact Codex session was closed.'
+      }
+    } elseif ($skinLooksRendered) {
       # The skin is on screen and only an inconclusive probe failed. Force-
       # restarting Codex here would take a working window away from the user
       # and leave them with the stock appearance, which is worse than the
       # unverified state we are in. The injector is already stopped and the
       # state file removed, so nothing claims this session is verified; Codex
       # keeps running with its debug port until the user closes it (#267).
+      if ($null -ne $appearanceTransaction) {
+        try {
+          Complete-DreamSkinAppearanceTransaction `
+            -BackupPath $BackupPath -Transaction $appearanceTransaction
+          $appearanceRecovery = 'preserved-rendered'
+        } catch {
+          $appearanceRecovery = 'blocked'
+          Write-Warning 'Rendered appearance ownership could not be committed; the pending recovery record was retained.'
+        }
+      }
       Write-Warning 'Dream Skin could not verify this session, but the theme is rendered. Codex was left running; close and reopen it to return to the stock appearance.'
     }
     if ($pauseWasSet -and $pauseCleared) {
@@ -383,6 +734,53 @@ try {
   }
 
   Write-Host "Codex Dream Skin is active on verified loopback port $Port."
+  if ($ResultToken) {
+    Write-DreamSkinStartResult -StateRoot $StateRoot -Token $ResultToken `
+      -Outcome 'success' -Category 'none' -AppearanceRecovery $appearanceRecovery
+  }
+  if ($null -ne $themeSelectionTransaction) {
+    $completedSnapshot = $themeSelectionTransaction.Snapshot
+    $themeSelectionTransaction = $null
+    try { Remove-DreamSkinManagedDirectoryVerified -Path $completedSnapshot -Root $StateRoot } catch {
+      Write-Warning 'The verified theme is active, but its completed rollback snapshot could not be removed.'
+    }
+  }
+} catch {
+  $startError = $_
+  if ($null -ne $themeSelectionTransaction -and $null -ne $operationLock) {
+    try {
+      if ($appearanceRecovery -in @('blocked', 'conflict-preserved')) {
+        throw 'Appearance recovery is unresolved; theme rollback snapshot must be retained.'
+      }
+      $selectionRecovery = Restore-DreamSkinStartupThemeSelection `
+        -Transaction $themeSelectionTransaction -Paths $themePaths -StateRoot $StateRoot
+      if ($selectionRecovery -ceq 'restored' -and $null -ne $cdpIdentity -and
+        -not (Test-DreamSkinPaused -StateRoot $StateRoot)) {
+        $restoreIdentity = Get-DreamSkinVerifiedCdpIdentity -Port $Port -Codex $codex
+        if ($null -ne $restoreIdentity -and $restoreIdentity.BrowserId -ceq $cdpIdentity.BrowserId) {
+          $restoredInjection = Invoke-DreamSkinNative -FilePath $node.Path -ArgumentList @(
+            $Injector, '--once', '--port', "$Port", '--browser-id', $restoreIdentity.BrowserId,
+            '--theme-dir', $themePaths.Active, '--timeout-ms', '15000')
+          if ($restoredInjection.ExitCode -ne 0) { Write-Warning 'The previous theme files were restored, but their live appearance could not be verified.' }
+        }
+      }
+      Remove-DreamSkinManagedDirectoryVerified -Path $themeSelectionTransaction.Snapshot -Root $StateRoot
+      $themeSelectionTransaction = $null
+    } catch {
+      Write-Warning 'Theme selection recovery was blocked; its private rollback snapshot was retained.'
+    }
+  }
+  if ($ResultToken) {
+    try {
+      $reportedCategory = Get-DreamSkinStartFailureCategory `
+        -Exception $startError.Exception -FallbackCategory $startFailureCategory
+      Write-DreamSkinStartResult -StateRoot $StateRoot -Token $ResultToken `
+        -Outcome 'failure' -Category $reportedCategory -AppearanceRecovery $appearanceRecovery
+    } catch {
+      Write-Warning 'Dream Skin could not write its bounded child-start result.'
+    }
+  }
+  throw $startError
 } finally {
   if ($null -ne $operationLock) { Exit-DreamSkinOperationLock -Mutex $operationLock }
 }

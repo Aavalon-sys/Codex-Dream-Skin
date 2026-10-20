@@ -114,6 +114,36 @@ test("compiles validated declarations into the controlled community cascade laye
   }
 });
 
+test("compiles composer borders into controlled runtime bridge variables", () => {
+  const source = `[data-ds-part="composer"] {
+  background-color: rgba(244, 250, 255, 0.10);
+  border-color: rgba(255, 255, 255, 0.28);
+  border-width: 1px;
+  border-style: solid;
+}
+[data-ds-part="composer"]:hover {
+  border-color: rgba(255, 255, 255, 0.36);
+}`;
+  for (const validator of validators) {
+    const runtime = validator.compileSafeCss(source);
+    assert.match(runtime, /background-color: rgba\(244, 250, 255, 0.10\) !important;/);
+    assert.match(runtime, /--ds-community-composer-border-color: rgba\(255, 255, 255, 0.28\) !important;/);
+    assert.match(runtime, /--ds-community-composer-border-width: 1px !important;/);
+    assert.match(runtime, /--ds-community-composer-border-style: solid !important;/);
+    assert.match(runtime, /\[data-ds-part="composer"\]:hover \{[\s\S]*--ds-community-composer-border-color: rgba\(255, 255, 255, 0.36\) !important;/);
+    assert.doesNotMatch(runtime, /\n\s*border:/);
+  }
+});
+
+test("does not bridge state-only composer borders without a base value", () => {
+  const source = `[data-ds-part="composer"]:hover { border-color: #ffffff; }`;
+  for (const validator of validators) {
+    const runtime = validator.compileSafeCss(source);
+    assert.match(runtime, /border-color: #ffffff !important;/);
+    assert.doesNotMatch(runtime, /--ds-community-composer-border-color:/);
+  }
+});
+
 test("compiles bounded root and toolbar bridges for visible inherited styling", () => {
   const source = `[data-ds-part="root"] {
   background-color: #112233;
@@ -132,6 +162,32 @@ test("compiles bounded root and toolbar bridges for visible inherited styling", 
     assert.match(runtime, /font-family: system-ui, sans-serif !important;/);
     assert.match(runtime, /composer-toolbar[^\n]+:where\(button:not/);
     assert.match(runtime, /color: var\(--ds-theme-color-muted\) !important;/);
+  }
+});
+
+test("home hero sizes reach the tagline without widening the author selector contract", () => {
+  for (const validator of validators) {
+    for (const state of ["", ":hover", ":focus-visible"]) {
+      for (const size of [12, 18, 20]) {
+        const selector = `[data-ds-part="home-hero"]${state}`;
+        const source = `${selector} { font-size: ${size}px; color: #f5e7d0; }`;
+        assert.equal(validator.validateSafeCss(source).declarationCount, 2);
+        const compiled = validator.compileSafeCss(source);
+        assert.ok(compiled.includes(`${selector}::after {\n    font-size: ${size}px !important;\n  }`));
+        assert.ok(compiled.includes("color: #f5e7d0 !important;"));
+      }
+    }
+    assert.doesNotMatch(validator.compileSafeCss(
+      '[data-ds-part="home-hero"] { color: #f5e7d0; }',
+    ), /::after/, "Color-only themes keep the responsive default size");
+    assert.doesNotMatch(validator.compileSafeCss(
+      '[data-ds-part="sidebar"] { font-size: 18px; }',
+    ), /::after/, "Other parts do not acquire generated text styling");
+  }
+  assertRejected('[data-ds-part="home-hero"]::after { font-size: 18px; }', "selector/unsupported");
+  assertRejected('[data-ds-part="home-hero"] { --tagline-size: 18px; }', "property/name");
+  for (const size of [11, 21]) {
+    assertRejected(`[data-ds-part="home-hero"] { font-size: ${size}px; }`, "value/unsupported");
   }
 });
 

@@ -1,8 +1,64 @@
 # Windows Changelog
 
+## 1.5.21
+
+- 修复启用 `NODE_USE_ENV_PROXY` 时，Node 的无害 stderr 警告被 Windows PowerShell 5.1 升级为终止错误、导致安装或主题操作失败的问题；图片、Safe CSS、主题 ZIP 和 payload 校验统一通过原生命令封装执行。
+- 将启动和主题包验证的 JSON 输出与 stderr 分开处理，保留真实失败退出码和诊断信息；不修改用户代理设置，也不全局关闭 Node 警告。
+
+## 1.5.20
+
+- 修复首页副文案不跟随 `home-hero` 的 Safe CSS 字号和颜色的问题（[#427](https://github.com/Fei-Away/Codex-Dream-Skin/issues/427)）：支持 12–20px 合法字号，保留 76% 不透明度；未指定字号时仍为桌面 13px、窄窗口 11px。
+- 安装、启动和恢复遵循已有的 `CODEX_HOME`，未设置或为空时使用默认 `.codex`；无效路径明确报错。配置备份绑定来源目录，拒绝跨目录恢复；切换前需先在原目录完成恢复（[#428](https://github.com/Fei-Away/Codex-Dream-Skin/issues/428)、[#431](https://github.com/Fei-Away/Codex-Dream-Skin/pull/431)）。
+- 自定义目录要求安装器、托盘与官方 Codex 获得同一个已有的 `CODEX_HOME`；终端变量可能无法传给 Store 激活的应用，需确认用户级设置对新进程生效。新目录可能要求登录或首次设置。换肤仍备份并调整外观配置，不自动改写 API Key、Base URL 或模型供应商设置。完整说明见 [v1.5.20 发布说明](../docs/releases/v1.5.20.md)。
+
+## 1.5.19
+
+- 修复 Windows 26.930 首页输入框裁切、顶栏重复底色和停靠侧栏内侧圆角漏底；保留作者主题色及透明度，适配仅生成到 Windows 资产。
+- Windows 的“减少动态效果”模式直接禁用过渡，避免全元素 0.01ms 过渡造成额外样式重算；保留动画完成事件和正常动态效果模式。
+- 桌面、开始菜单及托盘双击统一打开 C# 原生主题管理窗口：按主题保存 0–100% 透明度、跟随主题，以及确认后移到回收站（#422）。使用中的主题需先切换；原 PowerShell 主题选择窗口已移除。
+- 托盘应用结果以子进程的渲染验证为准。关闭最后一个窗口后的隐藏会话可经确认恢复，取消或失败的主题选择安全回滚。
+- 修复回收站 COM 接口类型，保留中文目录及嵌套文件；升级／卸载前正常关闭原生管理器，避免旧进程阻止运行时替换。
+
+## 1.5.18
+
+- 同步首页建议卡新旧文字类的共享主题色规则；macOS 26.901.41123 提供实际类名证据，Windows 原生表现仍由对应平台验收。
+- 发布候选：原生字体保留（#399 / #403）、首页圆角（#394 / #396，感谢 @chenzhaoxuan0），以及此前未发布的横向溢出校验（#386）和受管 CDP profile（#390）。首次使用受管 profile 需要重新登录；发布前必须验证第二次启动保留登录且 runtime 交接后 CDP 可用。完整说明见 [v1.5.17 发布说明](../docs/releases/v1.5.17.md)。
+
 ## Unreleased
 
+### 新增
+
+- 托盘新增 System / English / 中文语言选择，选择会持久保存，并覆盖状态、主题操作、更新、恢复/卸载和一键换肤流程；System 会根据系统 UI 语言自动选择中文或英文（#351）。
+
 ### 修复
+
+- 保留 Codex 自定义界面字体和代码字体，基础皮肤不再强制覆盖 body 字体（#399）。
+- 完整补齐 Codex 26.818 主题兼容（#373，感谢 @QingYe-05 的 Windows 实机源码证据）：托盘“更换背景图”现在保留当前 `theme.json`、颜色、构图参数和已验证的 `theme.css`；共享 renderer 同时清除 sticky composer 的两层原生渐变、约束 Markdown 宽表、映射真实用户气泡，并改善流式思考、命令详情、新版动作按钮、横向壁纸和顶部栏的可读性；固定品牌/状态伪文案不再覆盖原生界面。
+- 修复新版 Codex 把输入框壳迁移到 `_ComposerLayoutRoot_` 后，Dream Skin 误把 `_ComposerLayoutFooter_` 标记为 composer、导致主题输入框样式只落在底部工具栏的问题；同时排除 `/avatar-overlay` 与 Pet composition surface，并在发现旧注入时执行移除与验证，避免主题壁纸污染透明 Pet 窗口形成矩形背景。
+- 修复 Chromium 136 及更高版本上 Dream Skin 完全打不开 CDP、主题一点都不生效的问题（#235、#363）：Chromium 会忽略指向默认数据目录的 `--remote-debugging-port`，而 Windows 启动器此前只在显式传入 `-ProfilePath` 时才追加 `--user-data-dir`，而出厂路径里没有任何调用方传过它——这个分支恒为假。现在默认创建并复用 `%LOCALAPPDATA%\CodexDreamSkin\cdp-profile`，与官方 Codex profile 隔离，不修改 WindowsApps；显式 `-ProfilePath` 仍可覆盖。注意首次使用受管 profile 需要在该 profile 内重新登录一次 Codex，之后会持久保留。
+- 修复 Windows 首次或冷启动状态下从 DreamSkin.cc 一键换肤被错误拒绝的问题。客户端现在会在下载主题包前安全启动并验证当前主题；如果官方 Codex 未提供可用 CDP 端点，则在任何主题库或活动主题写入前返回明确失败。
+- 修复透明或极端显式强调色下按钮文字对比度不稳定的问题：共享渲染器现在按真实 composer 面板表面和最坏背景计算前景色，并正确处理 alpha 与 RGB 夹取（#351）。
+- 修复 Windows 启动失败后只留下颜色、背景等部分外观状态的问题（#354、#357）：新增有界持久 journal 和三方恢复，保留较新的用户编辑；一键换肤在慢启动、超时或渲染未确认时不强杀仍运行的子进程，也不留下混合的活动主题文件，并提供可区分的有界失败原因。该修复处理本地失败启动的状态一致性，不改变官方 Codex 的 CDP 能力。
+- 修复 Windows PowerShell 5.1 在中文、日文等非 ASCII 临时目录下读取
+  bundled Node.js `process.execPath` 时受控制台代码页影响，导致安装器错误
+  报告「Node.js executable path could not be validated」的问题。路径探针现在
+  通过 ASCII Base64 传输原始 UTF-8 字节并严格解码，仍保留签名、版本和文件
+  存在性校验；无效探针不会回退到未经确认的候选路径（#337）。
+
+- Windows 路径穿越校验此前会把合法的、以 `.` 开头的主题文件名也当作可疑路径拒绝；现在能正确区分它们与真正的 `..` 路径穿越（#296）。
+- Windows 运行时加载主题前强制校验 `schemaVersion` 必须是数字 `1`，拒绝缺失或未来版本的 schema（#299）。
+- 主题包 manifest 时间戳校验拒绝不合法的 RFC 3339 值（#297），双平台共享。
+
+### 内部
+
+- 同步 v1.5.16 版本号，发布 #373 在 v1.5.15 中遗漏的完整 Codex 26.818 兼容修复。
+- 同步 v1.5.15 版本号，发布 Codex 26.814-26.818 composer 根节点与 Pet 透明 surface 兼容修复、原生侧栏图标颜色保留，以及受限 Safe CSS composer 边框桥接（#372、#368、#366）。
+- 同步 v1.5.14 版本号，发布 Windows 一键换肤冷启动会话基线修复（#352、#360）。
+- 同步 v1.5.13 版本号，发布本轮双端语言、对比度和 Windows 失败启动外观回滚修复。
+- 同步 v1.5.12 版本号，发布上述修复。
+- README / SECURITY.md 补充说明换肤期间本机回环 CDP 调试口未做身份验证这一既有安全边界（#18）。
+- CI 新增对 shared runtime 与 tools 目录的测试覆盖（#300）。
+- 修复共享的 `image-metadata.mjs` 生成源与 macOS 产物不同步的问题：Windows 一侧此前完全没有拿到 `readRawDimensions` 拆分后的能力，现已随双端产物重新生成补上。
 
 - 修复 Codex Desktop 26.727 设置页改用新版导航标记后，被注入器误判为非 ChatGPT 页面并报 `No page matched the expected ChatGPT shell markers` 的问题。双端共享契约现识别 `data-settings-panel-slug="general-settings"`，同时保留旧版外观设置锚点和严格的 `app:` 来源校验；首页与任务页的 L1 校验边界不变。
 - 修复 Codex Desktop 26.727 更新后主区域、顶栏和顶部渐隐仍保持原生白底，或注入被错误报告为成功的问题（#320、#322、#326、#330）。共享选择器现同时识别旧结构与新版 app-shell 标记，首页和普通任务页必须达到完整 L1 可见性后才会提交成功。

@@ -285,11 +285,12 @@ function Get-DreamSkinValidatedImageMetadata {
   }
   $node = Get-DreamSkinNodeRuntime
   $metadataScript = Join-Path $PSScriptRoot 'image-metadata.mjs'
-  $output = @(& $node.Path $metadataScript '--check' ([System.IO.Path]::GetFullPath($Path)) 2>&1)
-  if ($LASTEXITCODE -ne 0) {
+  $result = Invoke-DreamSkinNative -FilePath $node.Path -ArgumentList @(
+    $metadataScript, '--check', ([System.IO.Path]::GetFullPath($Path))) -DiscardStderr
+  if ($result.ExitCode -ne 0) {
     throw "Image metadata is invalid or exceeds the 16384px / 50MP safety limit: $Path"
   }
-  try { $metadata = ($output -join "`n") | ConvertFrom-Json -ErrorAction Stop } catch {
+  try { $metadata = ($result.Output -join "`n") | ConvertFrom-Json -ErrorAction Stop } catch {
     throw "Image metadata helper returned invalid output: $Path"
   }
   if ($null -eq $metadata -or $null -eq $metadata.width -or $null -eq $metadata.height) {
@@ -335,9 +336,9 @@ function Assert-DreamSkinSafeCssFile {
   if (-not (Test-Path -LiteralPath $validator -PathType Leaf)) {
     throw 'Safe CSS validator is missing from the runtime engine.'
   }
-  $output = @(& $node.Path $validator $fullPath 2>&1)
-  if ($LASTEXITCODE -ne 0) {
-    $detail = ($output -join "`n").Trim()
+  $result = Invoke-DreamSkinNative -FilePath $node.Path -ArgumentList @($validator, $fullPath)
+  if ($result.ExitCode -ne 0) {
+    $detail = ($result.Output -join "`n").Trim()
     throw $(if ($detail) { $detail } else { 'Theme Safe CSS failed validation.' })
   }
 }
@@ -594,6 +595,7 @@ function Set-DreamSkinActiveTheme {
   try { $oldImage = (Read-DreamSkinTheme -ThemeDirectory $paths.Active).ImagePath } catch {}
   if ($null -eq $Theme) {
     $Theme = [pscustomobject]@{
+      schemaVersion = 1
       id = 'custom'
       name = '自定义主题'
       appearance = 'auto'
@@ -649,6 +651,28 @@ function Set-DreamSkinActiveTheme {
   Assert-DreamSkinNoReparseComponents -Path $imageArchive
   Assert-DreamSkinImageFile -Path $imageArchive
   return Read-DreamSkinTheme -ThemeDirectory $paths.Active
+}
+
+function Set-DreamSkinActiveThemeImage {
+  param(
+    [Parameter(Mandatory = $true)][string]$ImagePath,
+    [string]$StateRoot = (Join-Path $env:LOCALAPPDATA 'CodexDreamSkin')
+  )
+  $paths = Get-DreamSkinThemePaths -StateRoot $StateRoot
+  $current = Read-DreamSkinTheme -ThemeDirectory $paths.Active
+
+  # Changing the artwork is an update to the active theme, not a request to
+  # replace its validated contract with the generic custom-theme defaults.
+  $theme = $current.Theme | ConvertTo-Json -Depth 8 | ConvertFrom-Json
+  $safeCssPath = Join-Path $paths.Active 'theme.css'
+  if (Test-Path -LiteralPath $safeCssPath -PathType Leaf) {
+    Assert-DreamSkinSafeCssFile -Path $safeCssPath
+  } else {
+    $safeCssPath = $null
+  }
+
+  return Set-DreamSkinActiveTheme -ImagePath $ImagePath -Theme $theme `
+    -SafeCssPath $safeCssPath -StateRoot $StateRoot
 }
 
 function Save-DreamSkinCurrentTheme {
@@ -1762,13 +1786,14 @@ function Import-DreamSkinThemeZip {
     $validatedRoot = Join-Path $workRoot 'validated'
     Ensure-DreamSkinManagedDirectory -Path $validatedRoot -Root $paths.Root
     $clientVersion = (Read-DreamSkinUtf8File -Path $versionPath).Trim()
-    $packageOutput = @(& $node.Path $packageValidator '--source' $sourceRoot '--stage' $validatedRoot `
-      '--platform' 'windows' '--client-version' $clientVersion 2>&1)
-    if ($LASTEXITCODE -ne 0) {
-      $detail = ($packageOutput -join "`n").Trim()
+    $packageResult = Invoke-DreamSkinNative -FilePath $node.Path -ArgumentList @(
+      $packageValidator, '--source', $sourceRoot, '--stage', $validatedRoot,
+      '--platform', 'windows', '--client-version', $clientVersion) -SeparateStderr
+    if ($packageResult.ExitCode -ne 0) {
+      $detail = (($packageResult.Output + $packageResult.ErrorOutput) -join "`n").Trim()
       throw $(if ($detail) { $detail } else { 'Theme ZIP failed package validation.' })
     }
-    try { $packageInfo = ($packageOutput -join "`n") | ConvertFrom-Json -ErrorAction Stop } catch {
+    try { $packageInfo = ($packageResult.Output -join "`n") | ConvertFrom-Json -ErrorAction Stop } catch {
       throw 'Theme package validator returned invalid output.'
     }
     if ($packageInfo.format -notin @('official', 'simple')) {
@@ -1797,8 +1822,9 @@ function Import-DreamSkinThemeZip {
     $requestedId = $sourceIdentity.RequestedId
     $injector = Join-Path $PSScriptRoot 'injector.mjs'
     if ($sourceIdentity.SourceIdIsString) {
-      $payloadCheck = @(& $node.Path $injector '--check-payload' '--theme-dir' $sourceRoot 2>&1)
-      if ($LASTEXITCODE -ne 0) {
+      $payloadCheck = Invoke-DreamSkinNative -FilePath $node.Path -ArgumentList @(
+        $injector, '--check-payload', '--theme-dir', $sourceRoot)
+      if ($payloadCheck.ExitCode -ne 0) {
         throw 'Theme ZIP failed theme.json or image payload validation.'
       }
     }
@@ -1929,8 +1955,9 @@ function Import-DreamSkinThemeZip {
     # Missing/non-string source IDs cannot pass the injector until the stable
     # fallback ID has been written. This private-stage check remains mandatory
     # and completes before any existing saved theme is moved or replaced.
-    $stagedPayloadCheck = @(& $node.Path $injector '--check-payload' '--theme-dir' $publishStage 2>&1)
-    if ($LASTEXITCODE -ne 0) { throw 'Imported theme failed final payload validation.' }
+    $stagedPayloadCheck = Invoke-DreamSkinNative -FilePath $node.Path -ArgumentList @(
+      $injector, '--check-payload', '--theme-dir', $publishStage)
+    if ($stagedPayloadCheck.ExitCode -ne 0) { throw 'Imported theme failed final payload validation.' }
 
     $destination = Join-Path $paths.Saved $id
     $backup = $null
@@ -2270,17 +2297,25 @@ function Show-DreamSkinOperationUi {
 function Invoke-DreamSkinLiveRemove {
   param(
     [string]$StateRoot = (Join-Path $env:LOCALAPPDATA 'CodexDreamSkin'),
-    [int]$TimeoutMs = 8000
+    [int]$TimeoutMs = 8000,
+    [string]$PauseNoSessionMessage = '没有可连接的活动会话；已记录暂停，当前窗口可能仍显示皮肤。',
+    [string]$PauseSucceededMessage = '皮肤已暂停',
+    [string]$PauseFailedMessage = '已记录暂停，但卸下当前皮肤失败；可重试暂停或完全恢复。'
   )
   if ($TimeoutMs -lt 250 -or $TimeoutMs -gt 120000) {
     throw "Invalid live-remove timeout: $TimeoutMs"
+  }
+  foreach ($message in @($PauseNoSessionMessage, $PauseSucceededMessage, $PauseFailedMessage)) {
+    if ([string]::IsNullOrWhiteSpace($message) -or $message.Length -gt 240 -or $message -match "[\r\n]") {
+      throw 'Invalid live-remove message.'
+    }
   }
   $session = Get-DreamSkinLiveSessionContext -StateRoot $StateRoot
   if ($null -eq $session) {
     return [pscustomobject]@{
       Attempted = $false
       Removed = $false
-      Message = '没有可连接的活动会话；已记录暂停，当前窗口可能仍显示皮肤。'
+      Message = $PauseNoSessionMessage
     }
   }
 
@@ -2304,21 +2339,21 @@ function Invoke-DreamSkinLiveRemove {
   if ($removal.ExitCode -eq 0) {
     if ($token) {
       $null = Show-DreamSkinOperationUi -Session $session -Phase finish -Token $token `
-        -UiState success -Message '皮肤已暂停' -TimeoutMs 1500
+        -UiState success -Message $PauseSucceededMessage -TimeoutMs 1500
     }
     return [pscustomobject]@{
       Attempted = $true
       Removed = $true
-      Message = '皮肤已暂停'
+      Message = $PauseSucceededMessage
     }
   }
   if ($token) {
     $null = Show-DreamSkinOperationUi -Session $session -Phase finish -Token $token `
-      -UiState error -Message '暂停失败，请重试' -TimeoutMs 1500
+      -UiState error -Message $PauseFailedMessage -TimeoutMs 1500
   }
   return [pscustomobject]@{
     Attempted = $true
     Removed = $false
-    Message = '已记录暂停，但卸下当前皮肤失败；可重试暂停或完全恢复。'
+    Message = $PauseFailedMessage
   }
 }
