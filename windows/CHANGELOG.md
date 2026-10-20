@@ -2,6 +2,7 @@
 
 ## 1.5.21
 
+- 灰泽满 Hazel fork：正式安装包默认主题改为灰泽满（`preset-hazel`，立绘与贴纸按哈希校验），公开预设 Gothic Void Crusade 仍随包附带；初始化主题库时一并复制主题声明的 Q 版贴纸；检查更新与安装器更新地址指向本 fork。
 - 修复启用 `NODE_USE_ENV_PROXY` 时，Node 的无害 stderr 警告被 Windows PowerShell 5.1 升级为终止错误、导致安装或主题操作失败的问题；图片、Safe CSS、主题 ZIP 和 payload 校验统一通过原生命令封装执行。
 - 将启动和主题包验证的 JSON 输出与 stderr 分开处理，保留真实失败退出码和诊断信息；不修改用户代理设置，也不全局关闭 Node 警告。
 

@@ -2,6 +2,8 @@
 
 Codex Dream Skin Studio is an **unofficial** customization project and is **not affiliated with, endorsed by, or sponsored by OpenAI**.
 
+The bundled Hazel character artwork is sourced from the official Bilibili post listed in `references/asset-sources.md`. It is not licensed by this project's MIT license. Rights remain with the original creators and character stakeholders; downstream reuse or commercial use requires their permission. Rights-holder removal requests should be honored promptly.
+
 ## Software license
 
 The MIT License in `LICENSE` applies to the **software source code** in this repository (scripts, CSS, injectors, docs that describe the software, and the abstract demo asset generated for this repo).
