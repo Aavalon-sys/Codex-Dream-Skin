@@ -46,8 +46,15 @@ html[data-dream-skin="active"]:not(:has(__DREAM_SELECTOR_SHELL_MAIN__))
    under this chain, so upstream documents it as dormant — but dormant is
    not off, and if a future DOM restores that nesting it would paint the
    artwork a second time behind Hazel's own hero. Hazel builds its hero on
-   the game-source node, so this chain is never wanted. */
+   the game-source node, so this chain is never wanted.
+
+   Codex 26.1013 did restore that nesting: the chain now lands on the empty
+   home-takeover slot above the heading, and upstream's clamp(248px, …) height
+   turned it into a blank card that pushed the composer off-screen. Size has
+   to be reset along with the paint. */
 html[data-dream-skin="active"] __DREAM_SELECTOR_HOME_ROUTE__ > div:first-child > div:first-child > div:first-child {
+  height: auto !important;
+  min-height: 0 !important;
   background-image: none !important;
   border: 0 !important;
   box-shadow: none !important;
@@ -141,41 +148,11 @@ html[data-dream-skin="active"] __DREAM_SELECTOR_LEFT_PANEL__ {
   backdrop-filter: blur(18px) saturate(108%) !important;
 }
 
-/* The sidebar's rounded right corners and the content surface's rounded left
-   corners cut four notches where the page backdrop shows through — including
-   the decorative highlight centred at 16% 8%, which reads pink against the
-   surrounding tone. Paint those notches flat --ds-bg, on a layer above both
-   panels so their shadows cannot tint it: the result is exactly --ds-bg in
-   light and dark alike, with no per-mode compensation. Each layer is a 20px
-   tile carrying the inverse of one rounded corner, hung off the sidebar's own
-   box so it tracks the panel with no scripted measurement. */
-html[data-dream-skin="active"] [data-ds-part="sidebar"]::before,
-html[data-dream-skin="active"] [data-ds-part="sidebar"]::after {
-  content: "";
-  position: absolute;
-  right: -20px;
-  width: 40px;
-  height: 20px;
-  z-index: 3;
-  pointer-events: none;
-  background-size: 20px 20px;
-  background-repeat: no-repeat;
-  background-position: left top, right top;
-}
-
-html[data-dream-skin="active"] [data-ds-part="sidebar"]::before {
-  top: 0;
-  background-image:
-    radial-gradient(circle 20px at 0 100%, transparent 20px, var(--ds-bg) 20px),
-    radial-gradient(circle 20px at 100% 100%, transparent 20px, var(--ds-bg) 20px);
-}
-
-html[data-dream-skin="active"] [data-ds-part="sidebar"]::after {
-  bottom: 0;
-  background-image:
-    radial-gradient(circle 20px at 0 0, transparent 20px, var(--ds-bg) 20px),
-    radial-gradient(circle 20px at 100% 0, transparent 20px, var(--ds-bg) 20px);
-}
+/* No notch tiles. Up to 26.803 the four cut-outs beside the rounded panels
+   showed a backdrop that did not match its surroundings, so each was painted
+   flat --ds-bg. From 26.1013 the transparent title bar sits directly on top
+   of both panels and shows the same body wash, so the bare cut-outs already
+   continue it; painting them --ds-bg is what made them read as dark wedges. */
 
 html[data-dream-skin="active"] __DREAM_SELECTOR_LEFT_PANEL__ nav { background: transparent !important; }
 
@@ -209,8 +186,13 @@ html[data-dream-skin="active"] __DREAM_SELECTOR_LEFT_PANEL__ button[aria-label^=
   text-shadow: none !important;
 }
 
-html[data-dream-skin="active"] __DREAM_SELECTOR_LEFT_PANEL__ button[aria-label^="切换模式"]::after {
-  content: "  🩶";
+/* On the inner span, not the button: from Codex 26.1013 the button's own
+   ::after is its absolutely-positioned focus ring (inset: 0), so content put
+   there lands on top of the label instead of after it. */
+html[data-dream-skin="active"] __DREAM_SELECTOR_LEFT_PANEL__ button[aria-label^="切换模式"] > span::after {
+  content: "🩶";
+  flex: 0 0 auto;
+  margin-inline-start: 6px;
   font-size: 13px;
 }
 
@@ -327,28 +309,36 @@ html[data-dream-skin="active"] :is(__DREAM_SELECTOR_SHELL_MAIN__, [data-ds-part=
   position: relative !important;
 }
 
-html[data-dream-skin="active"] :is(__DREAM_SELECTOR_SHELL_MAIN__, [data-ds-part="main"]):has(__DREAM_SELECTOR_HOME_ROUTE_CSS__)
-  > __DREAM_SELECTOR_HEADER_TINT__::before,
-html[data-dream-skin="active"] :is(__DREAM_SELECTOR_SHELL_MAIN__, [data-ds-part="main"]):not(:has(__DREAM_SELECTOR_HOME_ROUTE_CSS__))
-  > __DREAM_SELECTOR_HEADER_TINT__::before {
-  content: "🩶  " var(--dream-skin-name, "Codex Dream Skin") "\A" var(--dream-skin-brand-subtitle, "CODEX DREAM SKIN");
-  position: absolute;
-  left: max(23px, calc(240px - (100vw - 100%)));
-  top: 2px;
-  z-index: 2;
-  display: grid;
-  align-content: center;
-  white-space: pre;
-  pointer-events: none;
-  color: var(--ds-text);
-  font: 700 13px/1.35 "SF Pro Rounded", "PingFang SC", system-ui, sans-serif;
-  letter-spacing: .01em;
-  text-shadow: 0 1px 0 color-mix(in srgb, white 42%, transparent);
-  /* Upstream's single-line brand clamps to 42%/360px and ellipsises; this one
-     is two lines and must not be clipped. */
-  max-width: none;
-  overflow: visible;
-  text-overflow: clip;
+/* The brand. Up to 26.803 it rode on the header, which sat inside the main
+   column. From 26.1013 the header is one fixed bar across the whole window,
+   so it moved to the sidebar: drawn into the title bar directly above the
+   panel, right-aligned to the panel's edge. That strip is empty while the
+   sidebar is open (the nav buttons end at 218px, the thread title starts
+   past the panel) — but when the sidebar collapses to its 52px icon rail the
+   thread title slides into it. A size query on the sidebar hides the brand
+   below 330px, so it never lands on the title or the traffic lights. The
+   sidebar's width is an inline style, never content-sized, so inline-size
+   containment changes nothing about its layout. */
+html[data-dream-skin="active"] [data-ds-part="sidebar"] {
+  container: hazel-sidebar / inline-size;
+}
+
+@container hazel-sidebar (min-width: 330px) {
+  html[data-dream-skin="active"] [data-ds-part="sidebar"]::before {
+    content: "🩶  " var(--dream-skin-name, "Codex Dream Skin") "\A" var(--dream-skin-brand-subtitle, "CODEX DREAM SKIN");
+    position: absolute;
+    right: 18px;
+    bottom: 100%;
+    height: var(--app-shell-titlebar-height, 44px);
+    z-index: 3;
+    display: grid;
+    align-content: center;
+    white-space: pre;
+    pointer-events: none;
+    color: var(--ds-text);
+    font: 700 12px/1.3 "SF Pro Rounded", "PingFang SC", system-ui, sans-serif;
+    letter-spacing: .01em;
+  }
 }
 
 html[data-dream-skin="active"] :is(__DREAM_SELECTOR_SHELL_MAIN__, [data-ds-part="main"]):has(__DREAM_SELECTOR_HOME_ROUTE_CSS__)
@@ -375,13 +365,25 @@ html[data-dream-skin="active"] :is(__DREAM_SELECTOR_SHELL_MAIN__, [data-ds-part=
 /* Corner quote, plus the drifting motes that used to be individual <i> nodes.
    One pseudo-element carries them as stacked radial-gradient layers, which
    animates on the compositor instead of laying out a dozen children. */
+/* The quote belongs inside the hero card. Offsetting it from the main surface
+   (bottom: 170px on 26.803) only held while the card happened to sit there:
+   26.1013 moved the card up and the quote was left floating over the
+   suggestion list. Anchoring ties it to the card itself, and a route without
+   the card (ChatGPT's home) gets no quote rather than a stray one. */
+html[data-dream-skin="active"] [data-ds-part="home-hero"] {
+  anchor-name: --hazel-hero;
+}
+
 html[data-dream-skin="active"] :is(__DREAM_SELECTOR_SHELL_MAIN__, [data-ds-part="main"]):has(__DREAM_SELECTOR_HOME_ROUTE_CSS__)::after {
   content: var(--dream-skin-quote, "MAKE SOMETHING WONDERFUL");
+  display: none;
   position: absolute;
-  right: 34px;
-  /* 26.803 parks the composer flush with the bottom edge, so a 26px quote
-     lands on the model picker. 170px clears the home composer block. */
-  bottom: 170px;
+  position-anchor: --hazel-hero;
+  /* Clear of the figure: the art is height-driven, so the character spans
+     a near-constant ~105-118px in from the card's right edge at any window
+     width. Over her plaid skirt the muted text was unreadable in light mode. */
+  right: calc(anchor(right) + 132px);
+  bottom: calc(anchor(bottom) + 24px);
   z-index: 2;
   pointer-events: none;
   max-width: 46%;
@@ -389,6 +391,10 @@ html[data-dream-skin="active"] :is(__DREAM_SELECTOR_SHELL_MAIN__, [data-ds-part=
   color: color-mix(in srgb, var(--ds-muted) 82%, transparent);
   font: 600 12px/1.6 "SF Pro Rounded", "PingFang SC", system-ui, sans-serif;
   letter-spacing: .02em;
+}
+
+html[data-dream-skin="active"] :is(__DREAM_SELECTOR_SHELL_MAIN__, [data-ds-part="main"]):has(__DREAM_SELECTOR_HOME_ROUTE_CSS__):has([data-ds-part="home-hero"])::after {
+  display: block;
 }
 
 html[data-dream-skin="active"] :is(__DREAM_SELECTOR_SHELL_MAIN__, [data-ds-part="main"]):has(__DREAM_SELECTOR_HOME_ROUTE_CSS__)::before {
@@ -445,15 +451,22 @@ html[data-dream-skin="active"] __DREAM_SELECTOR_HOME_ROUTE__:has(__DREAM_SELECTO
 /* In the fork, 276px/452px sized the outer hero *zone* (card plus the
    suggestion row hanging under it). Codex 26.803 removed the suggestion row
    and the port collapsed the zone onto the card itself, which blew the card
-   up into mostly-empty space. The card is its own size now; no zone rules. */
+   up into mostly-empty space. The card is its own size now; no zone rules.
+
+   26.1013 put a suggestion list back between the card and the composer, and
+   a usage banner can sit above the composer too, so a fixed 300px card can
+   push the composer below the window. The card keeps 300px when the window
+   has room and gives way down to 240px, the least that still clears the
+   subtitle from the sticker. 540px is everything else on the home route
+   with the banner showing, measured on a 806px-tall window. */
 
 html[data-dream-skin="active"] __DREAM_SELECTOR_HOME_ROUTE__ __DREAM_SELECTOR_GAME_SOURCE__ {
   position: relative !important;
   isolation: isolate;
   width: calc(100% - 36px) !important;
   max-width: none !important;
-  height: 300px !important;
-  min-height: 300px !important;
+  height: clamp(240px, calc(100vh - 540px), 300px) !important;
+  min-height: clamp(240px, calc(100vh - 540px), 300px) !important;
   flex: 0 1 auto !important;
   padding: 0 !important;
   overflow: visible !important;
@@ -719,6 +732,53 @@ html[data-dream-skin="active"] __DREAM_SELECTOR_HOME_ROUTE__ __DREAM_SELECTOR_HO
   justify-content: center !important;
 }
 html[data-dream-skin="active"] __DREAM_SELECTOR_HOME_ROUTE__ __DREAM_SELECTOR_HOME_SUGGESTIONS__ button > span:last-child { align-items: center !important; text-align: center !important; }
+
+/* Codex 26.1013 brought suggestions back as single-line rows (a 16px icon
+   and a truncated label), not cards. Every rule above assumes the card shape,
+   and on a row the full-width icon span squeezes the label to 0px, leaving
+   tall empty boxes with a lone icon. Rows keep the native layout and take
+   only Hazel's colours; the extra attribute in the selector is what lets
+   these beat both the card rules above and upstream's. */
+html[data-dream-skin="active"] __DREAM_SELECTOR_HOME_ROUTE__ __DREAM_SELECTOR_HOME_SUGGESTIONS__ button:is(__DREAM_SELECTOR_HOME_SUGGESTION_ROW__) {
+  min-height: 0 !important;
+  padding: 6px 10px !important;
+  gap: 10px !important;
+  align-items: center !important;
+  text-align: start !important;
+  color: var(--ds-muted) !important;
+  font-weight: 500 !important;
+  border: 1px solid transparent !important;
+  border-radius: 14px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  transform: none !important;
+}
+
+html[data-dream-skin="active"] __DREAM_SELECTOR_HOME_ROUTE__ __DREAM_SELECTOR_HOME_SUGGESTIONS__ button:is(__DREAM_SELECTOR_HOME_SUGGESTION_ROW__):hover {
+  color: var(--ds-text) !important;
+  border-color: color-mix(in srgb, var(--ds-accent) 22%, transparent) !important;
+  background: color-mix(in srgb, var(--ds-accent) 10%, transparent) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+html[data-dream-skin="active"] __DREAM_SELECTOR_HOME_ROUTE__ __DREAM_SELECTOR_HOME_SUGGESTIONS__ button:is(__DREAM_SELECTOR_HOME_SUGGESTION_ROW__) > span:first-child {
+  width: auto !important;
+  flex: 0 0 auto !important;
+}
+
+html[data-dream-skin="active"] __DREAM_SELECTOR_HOME_ROUTE__ __DREAM_SELECTOR_HOME_SUGGESTIONS__ button:is(__DREAM_SELECTOR_HOME_SUGGESTION_ROW__) > span:last-child {
+  text-align: start !important;
+}
+
+html[data-dream-skin="active"] __DREAM_SELECTOR_HOME_ROUTE__ __DREAM_SELECTOR_HOME_SUGGESTIONS__ button:is(__DREAM_SELECTOR_HOME_SUGGESTION_ROW__) svg {
+  position: static !important;
+  width: 16px !important;
+  height: 16px !important;
+  color: var(--ds-accent) !important;
+  transform: none !important;
+}
 
 html[data-dream-skin="active"] __DREAM_SELECTOR_COMPOSER_CHROME__ {
   border: 1px solid color-mix(in srgb, var(--ds-accent) 28%, transparent) !important;

@@ -2,8 +2,13 @@
   "schema": "codex-dream-skin-selectors/1",
   "description": "双端统一选择器契约。scope 与 required 来自双端 DOM 快照实测；shell-main 与 header-tint 另由 2026-07-31 Codex 26.727.40816 真实 macOS renderer 复核。doctor / CI 应逐条 querySelector 并按 tier 判级：L1 缺失=皮肤主行为受损，L2 缺失=精修静默降级。",
   "verifiedAgainst": {
-    "date": "2026-09-26",
+    "date": "2026-10-20",
     "codexVersions": [
+      {
+        "version": "26.1013.40934",
+        "platform": "macos",
+        "evidence": "maintainer (Hazel fork): 已签名 macOS app 的 live app:// renderer（Chromium 155.0.8059.80）经 loopback CDP 逐条 querySelectorAll，Codex 首页与会话同时挂载时取样。命中：shell-main、left-panel、header-tint、main-content-top-fade、home-icon、home-route、home-route-css、composer-chrome、composer-toolbar、game-source、home-suggestions、home-suggestion-row（新增）、thread-surface、message。未命中：markdown（会话正文类名已变，未定位新锚点）、home-banners、home-utility、project-selector。settings 与 overlay 路由未取样。此条只代表 Hazel fork 的验证，非上游维护者复核"
+      },
       {
         "version": "26.924.22138",
         "platform": "macos",
@@ -84,6 +89,7 @@
     { "key": "home-utility", "selector": ":is([class*=\"_homeUtilityBar_\"], [class*=\"_ComposerHomeUtilityBar_\"])", "tier": "L2", "scope": "home", "required": false, "notes": "CSS Modules 前缀匹配；兼容旧 homeUtilityBar 与 ComposerHomeUtilityBar，模块名跨端稳定、hash 随版本变，禁止匹配完整 hash" },
     { "key": "game-source", "selector": "[data-feature=\"game-source\"]", "tier": "L2", "scope": "home", "required": false },
     { "key": "home-suggestions", "selector": ".group\\/home-suggestions", "tier": "L2", "scope": "home", "required": false },
+    { "key": "home-suggestion-row", "selector": "[class*=\"_RowHeight_\"]", "tier": "L2", "scope": "home", "required": false, "notes": "Codex 26.1013 把首页建议恢复成单行列表（图标 + 截断文字），按钮带 _RowHeight_ 模块类；旧版卡片式建议没有此类。只在 home-suggestions 内使用，用来把卡片规则换回单行布局" },
     { "key": "project-selector", "selector": ".group\\/project-selector", "tier": "L2", "scope": "home config", "required": false, "notes": "依赖用户项目配置；win 快照未出现（该机可能未配置项目），不算平台差异" },
     { "key": "markdown", "selector": "[class*=\"_markdown\"]", "tier": "L2", "scope": "thread", "required": false, "notes": "会话内容块，单页可达 100+ 个，样式规则注意性能" },
     { "key": "thread-surface", "selector": ".thread-scroll-container", "tier": "L2", "scope": "thread", "required": false, "notes": "会话滚动表面；双端活动会话快照均存在" },
