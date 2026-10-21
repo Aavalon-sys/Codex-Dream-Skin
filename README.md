@@ -66,8 +66,10 @@ curl -fsSL https://raw.githubusercontent.com/Aavalon-sys/Codex-Dream-Skin/main/i
 
 这些都在 `macos/assets/theme.json` 里，改完重新应用即可，不用碰 CSS。
 
-**界面**：Codex 首页的主卡片带立绘和 Q 版贴纸，窗口变矮时自动收缩；ChatGPT 首页、聊天、工作页右侧是半透明立绘，底部渐隐；
-Windows 侧栏与内容区采用直角边框，顶部品牌字避开菜单；聊天区上下渐隐统一底色，窗口变窄时自动隐藏品牌字。
+**界面**：Codex 首页的主卡片带立绘和 Q 版贴纸；ChatGPT 首页、聊天、工作页右侧是半透明立绘，底部渐隐。
+
+- macOS —— 侧栏与内容区是圆角面板，主卡片在窗口变矮时自动收缩，侧栏收起时标题栏里的品牌字自动隐藏
+- Windows —— 侧栏与内容区采用直角边框，顶部品牌字避开菜单，聊天区上下渐隐统一底色，窗口变窄时自动隐藏品牌字
 
 ---
 

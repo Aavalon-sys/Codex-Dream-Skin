@@ -273,7 +273,7 @@ html[data-dream-skin="active"] :is(__DREAM_SELECTOR_SHELL_MAIN__, [data-ds-part=
    on a hard horizontal edge. */
 html[data-dream-skin="active"] :is(__DREAM_SELECTOR_SHELL_MAIN__, [data-ds-part="main"]):not(:has(__DREAM_SELECTOR_HOME_ICON__)) {
   background:
-    linear-gradient(180deg, transparent 0%, transparent max(52px, calc(100% - var(--dream-skin-pet-safe-height, 180px) - 100px)), var(--ds-bg) calc(100% - var(--dream-skin-pet-safe-height, 180px))),
+    linear-gradient(180deg, transparent 0%, transparent 60%, var(--ds-bg) 88.5%),
     /* Opaque until the artwork actually starts. Fading --ds-bg over a --ds-bg
        base is a no-op visually, but the near-1 alphas still round to ±1 per
        band, which shows up as flat vertical stripes across the empty half. */
@@ -281,7 +281,7 @@ html[data-dream-skin="active"] :is(__DREAM_SELECTOR_SHELL_MAIN__, [data-ds-part=
       var(--ds-bg) 0%,
       var(--ds-bg) 40%,
       color-mix(in srgb, var(--ds-bg) 72%, transparent) 100%),
-    var(--dream-skin-art) right 24px top 52px / auto max(120px, calc(100% - 52px - var(--dream-skin-pet-safe-height, 180px))) no-repeat,
+    var(--dream-skin-art) calc(100% - 28px) 36% / auto 82% no-repeat,
     var(--ds-bg) !important;
 }
 
@@ -541,7 +541,7 @@ html[data-dream-skin="active"] __DREAM_SELECTOR_HOME_ROUTE__ __DREAM_SELECTOR_GA
     radial-gradient(circle at 78% 30%, color-mix(in srgb, var(--ds-accent-alt) 22%, transparent), transparent 32%),
     var(--dream-skin-art) !important;
   background-repeat: no-repeat !important;
-  background-size: 64px auto, 100% 100%, 100% 100%, auto 100% !important;
+  background-size: 64px 58px, 100% 100%, 100% 100%, auto 138% !important;
   background-position: left 38px bottom 24px, center, center, var(--dream-skin-image-position) center !important;
   box-shadow: 0 16px 40px color-mix(in srgb, var(--ds-text) 13%, transparent), inset 0 0 0 3px color-mix(in srgb, var(--ds-secondary) 20%, transparent) !important;
 }
@@ -931,12 +931,12 @@ html[data-dream-skin="active"][data-dream-shell="dark"] __DREAM_SELECTOR_HOME_RO
 
 html[data-dream-skin="active"][data-dream-shell="dark"] :is(__DREAM_SELECTOR_SHELL_MAIN__, [data-ds-part="main"]):not(:has(__DREAM_SELECTOR_HOME_ICON__)) {
   background:
-    linear-gradient(180deg, transparent 0%, transparent max(52px, calc(100% - var(--dream-skin-pet-safe-height, 180px) - 100px)), var(--ds-bg) calc(100% - var(--dream-skin-pet-safe-height, 180px))),
+    linear-gradient(180deg, transparent 0%, transparent 60%, var(--ds-bg) 88.5%),
     linear-gradient(90deg,
       var(--ds-bg) 0%,
       var(--ds-bg) 40%,
       color-mix(in srgb, var(--ds-bg) 78%, transparent) 100%),
-    var(--dream-skin-art) right 24px top 52px / auto max(120px, calc(100% - 52px - var(--dream-skin-pet-safe-height, 180px))) no-repeat,
+    var(--dream-skin-art) calc(100% - 28px) 36% / auto 82% no-repeat,
     var(--ds-bg) !important;
 }
 
@@ -964,7 +964,7 @@ html[data-dream-skin="active"][data-dream-shell="dark"] :is(__DREAM_SELECTOR_SHE
 }
 
 @media (max-width: 900px) {
-  html[data-dream-skin="active"] __DREAM_SELECTOR_HOME_ROUTE__ __DREAM_SELECTOR_GAME_SOURCE__ { height: 230px !important; min-height: 230px !important; background-size: 64px auto, 100% 100%, 100% 100%, auto 100% !important; }
+  html[data-dream-skin="active"] __DREAM_SELECTOR_HOME_ROUTE__ __DREAM_SELECTOR_GAME_SOURCE__ { height: 230px !important; min-height: 230px !important; background-size: 64px 58px, 100% 100%, 100% 100%, auto 122% !important; }
   html[data-dream-skin="active"] __DREAM_SELECTOR_HOME_ROUTE__ __DREAM_SELECTOR_GAME_SOURCE__ { padding: 26px 0 0 25px !important; }
   html[data-dream-skin="active"] __DREAM_SELECTOR_HOME_ROUTE__ __DREAM_SELECTOR_GAME_SOURCE__ > * { width: 67% !important; }
   html[data-dream-skin="active"] __DREAM_SELECTOR_HOME_ROUTE__ __DREAM_SELECTOR_GAME_SOURCE__ { font-size: 18px !important; }
@@ -980,7 +980,7 @@ html[data-dream-skin="active"][data-dream-shell="dark"] :is(__DREAM_SELECTOR_SHE
     background-image:
       var(--dream-skin-sticker, none),
       linear-gradient(120deg, color-mix(in srgb, var(--ds-panel-2) 97%, white), color-mix(in srgb, var(--ds-accent-alt) 18%, var(--ds-panel-2))) !important;
-    background-size: 64px auto, 100% 100% !important;
+    background-size: 64px 58px, 100% 100% !important;
     background-position: left 25px bottom 20px, center !important;
   }
   html[data-dream-skin="active"] __DREAM_SELECTOR_HOME_ROUTE__ __DREAM_SELECTOR_GAME_SOURCE__::before { width: 100%; }
@@ -991,6 +991,52 @@ html[data-dream-skin="active"][data-dream-shell="dark"] :is(__DREAM_SELECTOR_SHE
 
 @media (prefers-reduced-motion: reduce) {
   html[data-dream-skin="active"] * { scroll-behavior: auto !important; }
+}
+
+/* ── Windows layer ────────────────────────────────────────────────────────
+   Everything below applies only on Windows (html[data-codex-os="win32"]);
+   macOS keeps the shared rules above. The gate is :where(), which adds no
+   specificity, so each rule keeps the weight it had when written ungated
+   and wins on Windows only by coming later. Where a shared narrow-window
+   rule used to come after the value it overrides, it is repeated here so
+   the order on Windows is unchanged. */
+
+html[data-dream-skin="active"]:where([data-codex-os="win32"]) :is(__DREAM_SELECTOR_SHELL_MAIN__, [data-ds-part="main"]):not(:has(__DREAM_SELECTOR_HOME_ICON__)) {
+  background:
+    linear-gradient(180deg, transparent 0%, transparent max(52px, calc(100% - var(--dream-skin-pet-safe-height, 180px) - 100px)), var(--ds-bg) calc(100% - var(--dream-skin-pet-safe-height, 180px))),
+    /* Opaque until the artwork actually starts. Fading --ds-bg over a --ds-bg
+       base is a no-op visually, but the near-1 alphas still round to ±1 per
+       band, which shows up as flat vertical stripes across the empty half. */
+    linear-gradient(90deg,
+      var(--ds-bg) 0%,
+      var(--ds-bg) 40%,
+      color-mix(in srgb, var(--ds-bg) 72%, transparent) 100%),
+    var(--dream-skin-art) right 24px top 52px / auto max(120px, calc(100% - 52px - var(--dream-skin-pet-safe-height, 180px))) no-repeat,
+    var(--ds-bg) !important;
+}
+
+html[data-dream-skin="active"]:where([data-codex-os="win32"])[data-dream-shell="dark"] :is(__DREAM_SELECTOR_SHELL_MAIN__, [data-ds-part="main"]):not(:has(__DREAM_SELECTOR_HOME_ICON__)) {
+  background:
+    linear-gradient(180deg, transparent 0%, transparent max(52px, calc(100% - var(--dream-skin-pet-safe-height, 180px) - 100px)), var(--ds-bg) calc(100% - var(--dream-skin-pet-safe-height, 180px))),
+    linear-gradient(90deg,
+      var(--ds-bg) 0%,
+      var(--ds-bg) 40%,
+      color-mix(in srgb, var(--ds-bg) 78%, transparent) 100%),
+    var(--dream-skin-art) right 24px top 52px / auto max(120px, calc(100% - 52px - var(--dream-skin-pet-safe-height, 180px))) no-repeat,
+    var(--ds-bg) !important;
+}
+
+html[data-dream-skin="active"]:where([data-codex-os="win32"]) __DREAM_SELECTOR_HOME_ROUTE__ __DREAM_SELECTOR_GAME_SOURCE__ {
+  background-size: 64px auto, 100% 100%, 100% 100%, auto 100% !important;
+}
+
+@media (max-width: 900px) {
+  html[data-dream-skin="active"]:where([data-codex-os="win32"]) __DREAM_SELECTOR_HOME_ROUTE__ __DREAM_SELECTOR_GAME_SOURCE__ { background-size: 64px auto, 100% 100%, 100% 100%, auto 100% !important; }
+}
+
+@media (max-width: 720px) {
+  html[data-dream-skin="active"]:where([data-codex-os="win32"]) __DREAM_SELECTOR_HOME_ROUTE__ __DREAM_SELECTOR_GAME_SOURCE__ { background-size: 64px auto, 100% 100% !important; }
+  html[data-dream-skin="active"]:where([data-codex-os="win32"]) :is(__DREAM_SELECTOR_SHELL_MAIN__, [data-ds-part="main"]):not(:has(__DREAM_SELECTOR_HOME_ICON__)) { background: var(--ds-bg) !important; }
 }
 
 /* Hazel layout repair: Windows menus occupy the old sidebar brand slot. */
@@ -1020,7 +1066,7 @@ html[data-dream-skin="active"][data-codex-os="win32"] [class*="_ApplicationMenuT
 }
 /* Prevent text from occupying the sticker's 82px bottom band. A card may
    grow with wrapped copy rather than allowing its flow content to overlap. */
-html[data-dream-skin="active"] __DREAM_SELECTOR_HOME_ROUTE__ __DREAM_SELECTOR_GAME_SOURCE__ {
+html[data-dream-skin="active"]:where([data-codex-os="win32"]) __DREAM_SELECTOR_HOME_ROUTE__ __DREAM_SELECTOR_GAME_SOURCE__ {
   height: auto !important;
   min-height: clamp(240px, calc(100vh - 540px), 300px) !important;
   padding-bottom: 92px !important;
@@ -1045,10 +1091,10 @@ html[data-dream-skin="active"][data-codex-os="win32"] [data-ds-part="sidebar"]::
 html[data-dream-skin="active"][data-codex-os="win32"] .thread-scroll-container {
   scrollbar-gutter: auto !important;
 }
-html[data-dream-skin="active"] [data-thread-scroll-footer] > [aria-hidden="true"][class*="_background_"][class*="_surface_"] {
+html[data-dream-skin="active"]:where([data-codex-os="win32"]) [data-thread-scroll-footer] > [aria-hidden="true"][class*="_background_"][class*="_surface_"] {
   background: var(--ds-bg) !important;
 }
-html[data-dream-skin="active"] .thread-scroll-container [aria-hidden="true"][class*="_background_"][class*="_fade_"] {
+html[data-dream-skin="active"]:where([data-codex-os="win32"]) .thread-scroll-container [aria-hidden="true"][class*="_background_"][class*="_fade_"] {
   top: -96px !important;
   bottom: auto !important;
   height: 96px !important;
@@ -1059,7 +1105,7 @@ html[data-dream-skin="active"] .thread-scroll-container [aria-hidden="true"][cla
     color-mix(in srgb, var(--ds-bg) 8%, transparent) 80%,
     transparent 100%) !important;
 }
-html[data-dream-skin="active"] [class*="_MainContentTopFade_"] {
+html[data-dream-skin="active"]:where([data-codex-os="win32"]) [class*="_MainContentTopFade_"] {
   height: 80px !important;
   background: linear-gradient(to bottom,
     var(--ds-bg) 0%,
