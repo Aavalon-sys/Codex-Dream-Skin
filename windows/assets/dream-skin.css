@@ -2049,7 +2049,7 @@ html[data-dream-skin="active"] :is(main:is(.main-surface, [data-app-shell-main-s
    on a hard horizontal edge. */
 html[data-dream-skin="active"] :is(main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"]), [data-ds-part="main"]):not(:has([data-testid="home-icon"])) {
   background:
-    linear-gradient(180deg, transparent 0%, transparent 60%, var(--ds-bg) 88.5%),
+    linear-gradient(180deg, transparent 0%, transparent max(52px, calc(100% - var(--dream-skin-pet-safe-height, 180px) - 100px)), var(--ds-bg) calc(100% - var(--dream-skin-pet-safe-height, 180px))),
     /* Opaque until the artwork actually starts. Fading --ds-bg over a --ds-bg
        base is a no-op visually, but the near-1 alphas still round to ±1 per
        band, which shows up as flat vertical stripes across the empty half. */
@@ -2057,7 +2057,7 @@ html[data-dream-skin="active"] :is(main:is(.main-surface, [data-app-shell-main-s
       var(--ds-bg) 0%,
       var(--ds-bg) 40%,
       color-mix(in srgb, var(--ds-bg) 72%, transparent) 100%),
-    var(--dream-skin-art) calc(100% - 28px) 36% / auto 82% no-repeat,
+    var(--dream-skin-art) right 24px top 52px / auto max(120px, calc(100% - 52px - var(--dream-skin-pet-safe-height, 180px))) no-repeat,
     var(--ds-bg) !important;
 }
 
@@ -2317,7 +2317,7 @@ html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [dat
     radial-gradient(circle at 78% 30%, color-mix(in srgb, var(--ds-accent-alt) 22%, transparent), transparent 32%),
     var(--dream-skin-art) !important;
   background-repeat: no-repeat !important;
-  background-size: 64px 58px, 100% 100%, 100% 100%, auto 138% !important;
+  background-size: 64px auto, 100% 100%, 100% 100%, auto 100% !important;
   background-position: left 38px bottom 24px, center, center, var(--dream-skin-image-position) center !important;
   box-shadow: 0 16px 40px color-mix(in srgb, var(--ds-text) 13%, transparent), inset 0 0 0 3px color-mix(in srgb, var(--ds-secondary) 20%, transparent) !important;
 }
@@ -2707,12 +2707,12 @@ html[data-dream-skin="active"][data-dream-shell="dark"] [role="main"]:has([data-
 
 html[data-dream-skin="active"][data-dream-shell="dark"] :is(main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"]), [data-ds-part="main"]):not(:has([data-testid="home-icon"])) {
   background:
-    linear-gradient(180deg, transparent 0%, transparent 60%, var(--ds-bg) 88.5%),
+    linear-gradient(180deg, transparent 0%, transparent max(52px, calc(100% - var(--dream-skin-pet-safe-height, 180px) - 100px)), var(--ds-bg) calc(100% - var(--dream-skin-pet-safe-height, 180px))),
     linear-gradient(90deg,
       var(--ds-bg) 0%,
       var(--ds-bg) 40%,
       color-mix(in srgb, var(--ds-bg) 78%, transparent) 100%),
-    var(--dream-skin-art) calc(100% - 28px) 36% / auto 82% no-repeat,
+    var(--dream-skin-art) right 24px top 52px / auto max(120px, calc(100% - 52px - var(--dream-skin-pet-safe-height, 180px))) no-repeat,
     var(--ds-bg) !important;
 }
 
@@ -2740,7 +2740,7 @@ html[data-dream-skin="active"][data-dream-shell="dark"] :is(main:is(.main-surfac
 }
 
 @media (max-width: 900px) {
-  html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"] { height: 230px !important; min-height: 230px !important; background-size: 64px 58px, 100% 100%, 100% 100%, auto 122% !important; }
+  html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"] { height: 230px !important; min-height: 230px !important; background-size: 64px auto, 100% 100%, 100% 100%, auto 100% !important; }
   html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"] { padding: 26px 0 0 25px !important; }
   html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"] > * { width: 67% !important; }
   html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"] { font-size: 18px !important; }
@@ -2756,7 +2756,7 @@ html[data-dream-skin="active"][data-dream-shell="dark"] :is(main:is(.main-surfac
     background-image:
       var(--dream-skin-sticker, none),
       linear-gradient(120deg, color-mix(in srgb, var(--ds-panel-2) 97%, white), color-mix(in srgb, var(--ds-accent-alt) 18%, var(--ds-panel-2))) !important;
-    background-size: 64px 58px, 100% 100% !important;
+    background-size: 64px auto, 100% 100% !important;
     background-position: left 25px bottom 20px, center !important;
   }
   html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"]::before { width: 100%; }
@@ -2767,6 +2767,82 @@ html[data-dream-skin="active"][data-dream-shell="dark"] :is(main:is(.main-surfac
 
 @media (prefers-reduced-motion: reduce) {
   html[data-dream-skin="active"] * { scroll-behavior: auto !important; }
+}
+
+/* Hazel layout repair: Windows menus occupy the old sidebar brand slot. */
+html[data-dream-skin="active"][data-codex-os="win32"] [class*="_ApplicationMenuTopBar_"]::before {
+  content: "🩶  " var(--dream-skin-name) " · " var(--dream-skin-brand-subtitle);
+  position: absolute;
+  display: grid;
+  align-content: center;
+  pointer-events: none;
+  color: var(--ds-text);
+  white-space: nowrap;
+  top: 0;
+  bottom: auto;
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100vw - 700px);
+  height: 36px;
+  overflow: hidden;
+  text-align: center;
+  font-size: 10px;
+  line-height: 1.35;
+}
+@media (max-width: 1000px) {
+  html[data-dream-skin="active"][data-codex-os="win32"] [class*="_ApplicationMenuTopBar_"]::before { content: none; }
+}
+/* Prevent text from occupying the sticker's 82px bottom band. A card may
+   grow with wrapped copy rather than allowing its flow content to overlap. */
+html[data-dream-skin="active"] [role="main"]:has([data-testid="home-icon"]) [data-feature="game-source"] {
+  height: auto !important;
+  min-height: clamp(240px, calc(100vh - 540px), 300px) !important;
+  padding-bottom: 92px !important;
+  flex-shrink: 0 !important;
+}
+
+html[data-dream-skin="active"][data-codex-os="win32"] [data-ds-part="sidebar"]::before { content: none !important; }
+
+/* Square the two shell panels; preserve cards and input controls. */
+@layer properties {
+  html[data-dream-skin="active"][data-codex-os="win32"] [data-ds-part="sidebar"],
+  html[data-dream-skin="active"][data-codex-os="win32"] [data-ds-part="main"] {
+    border-radius: 0 !important;
+  }
+  html[data-dream-skin="active"][data-codex-os="win32"][data-codex-window-chrome="application-menu"]
+    [data-app-shell-frame][data-app-shell-sidebar-open="true"][data-app-shell-responsive-sidebar="false"][data-app-shell-docking-peek="false"]
+    [data-app-shell-workspace-row] > aside.app-shell-left-panel {
+    border-radius: 0 !important;
+  }
+}
+/* A continuous main-surface tone across native header/footer overlays. */
+html[data-dream-skin="active"][data-codex-os="win32"] .thread-scroll-container {
+  scrollbar-gutter: auto !important;
+}
+html[data-dream-skin="active"] [data-thread-scroll-footer] > [aria-hidden="true"][class*="_background_"][class*="_surface_"] {
+  background: var(--ds-bg) !important;
+}
+html[data-dream-skin="active"] .thread-scroll-container [aria-hidden="true"][class*="_background_"][class*="_fade_"] {
+  top: -96px !important;
+  bottom: auto !important;
+  height: 96px !important;
+  background: linear-gradient(to top,
+    var(--ds-bg) 0%,
+    color-mix(in srgb, var(--ds-bg) 92%, transparent) 20%,
+    color-mix(in srgb, var(--ds-bg) 50%, transparent) 50%,
+    color-mix(in srgb, var(--ds-bg) 8%, transparent) 80%,
+    transparent 100%) !important;
+}
+html[data-dream-skin="active"] [class*="_MainContentTopFade_"] {
+  height: 80px !important;
+  background: linear-gradient(to bottom,
+    var(--ds-bg) 0%,
+    color-mix(in srgb, var(--ds-bg) 85%, transparent) 20%,
+    color-mix(in srgb, var(--ds-bg) 40%, transparent) 50%,
+    color-mix(in srgb, var(--ds-bg) 5%, transparent) 80%,
+    transparent 100%) !important;
 }
 
 /* Windows 26.930 application-menu chrome already overlays the painted main.
