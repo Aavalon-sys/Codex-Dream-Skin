@@ -1945,6 +1945,15 @@ html[data-dream-skin="active"] aside.app-shell-left-panel [data-app-action-sideb
   margin-bottom: calc(var(--sidebar-footer-height, 0px) + 20px) !important;
 }
 
+/* Hovering the resize area fades in a 1px guide line that spans the whole
+   sidebar height, so it ran straight through the V between the two rounded
+   panels at the top and past their corners at the bottom. It is centred
+   (m-auto), so trimming one corner radius off each end keeps it on the
+   straight part of the seam while it still shows where to drag. */
+html[data-dream-skin="active"] .sidebar-resize-handle-line {
+  height: calc(100% - 40px) !important;
+}
+
 /* Codex's native sidebar resize chrome is the sidebar's ::after: a 20px strip
    that inherits the sidebar background and reaches into the main surface.
    The notch tiles used to repaint this pseudo-element and hid it by accident;

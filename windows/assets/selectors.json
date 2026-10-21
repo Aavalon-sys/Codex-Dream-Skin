@@ -7,7 +7,7 @@
       {
         "version": "26.1013.40934",
         "platform": "macos",
-        "evidence": "maintainer (Hazel fork): 已签名 macOS app 的 live app:// renderer（Chromium 155.0.8059.80）经 loopback CDP 逐条 querySelectorAll，Codex 首页与会话同时挂载时取样。命中：shell-main、left-panel、header-tint、main-content-top-fade、home-icon、home-route、home-route-css、composer-chrome、composer-toolbar、game-source、home-suggestions、home-suggestion-row（新增）、page-surface（新增）、sidebar-scroll（新增）、thread-surface、message。未命中：markdown（会话正文类名已变，未定位新锚点）、home-banners、home-utility、project-selector。settings 与 overlay 路由未取样。此条只代表 Hazel fork 的验证，非上游维护者复核"
+        "evidence": "maintainer (Hazel fork): 已签名 macOS app 的 live app:// renderer（Chromium 155.0.8059.80）经 loopback CDP 逐条 querySelectorAll，Codex 首页与会话同时挂载时取样。命中：shell-main、left-panel、header-tint、main-content-top-fade、home-icon、home-route、home-route-css、composer-chrome、composer-toolbar、game-source、home-suggestions、home-suggestion-row（新增）、page-surface（新增）、sidebar-scroll（新增）、sidebar-resize-line（新增）、thread-surface、message。未命中：markdown（会话正文类名已变，未定位新锚点）、home-banners、home-utility、project-selector。settings 与 overlay 路由未取样。此条只代表 Hazel fork 的验证，非上游维护者复核"
       },
       {
         "version": "26.924.22138",
@@ -80,6 +80,7 @@
     { "key": "left-panel", "selector": "aside.app-shell-left-panel", "tier": "L1", "scope": "all", "required": true, "notes": "左侧栏；收起/重建时会移除节点，勿在其消失时清皮" },
     { "key": "page-surface", "selector": "[class*=\"_PageSurface_\"]", "tier": "L2", "scope": "all", "required": false, "notes": "Codex 26.1013 起侧栏与主表面外层的原生页面容器（12px 圆角，带 0.5px 描边环）。侧栏收起到 52px 图标栏时，它的左缘与主表面左缘重合，描边环的 12px 圆角和主表面的 20px 圆角叠成两道错开的弧线" },
     { "key": "sidebar-scroll", "selector": "[data-app-action-sidebar-scroll]", "tier": "L2", "scope": "all", "required": false, "notes": "Codex 26.1013 侧栏的会话列表滚动容器（语义属性）。它一直延伸到侧栏底边，叠加式滚动条滚到底时会伸出侧栏右下角的圆角" },
+    { "key": "sidebar-resize-line", "selector": ".sidebar-resize-handle-line", "tier": "L2", "scope": "all", "required": false, "notes": "Codex 26.1013 侧栏拖动区悬停时显示的 1px 提示线（opacity 0→1），高度贯穿整个侧栏，会从两块圆角面板之间的缺口伸出" },
     { "key": "header-tint", "selector": "header:is(.app-header-tint, [data-app-shell-header-edge-scroll], [class*=\"_Header_\"])", "tier": "L1", "scope": "all", "required": true, "notes": "顶栏。26.727.40816 输出 data-app-shell-header-edge-scroll 并使用 _Header_ CSS Module；保留旧类兼容历史版本，前缀只限定在 header 元素。皮肤不得覆盖其 position/z-index（既有回归约束）" },
     { "key": "main-content-top-fade", "selector": ":is(.app-shell-main-content-top-fade, [data-app-shell-main-content-top-fade]:not(:has(*)), [class*=\"_MainContentTopFade_\"])", "tier": "L2", "scope": "all", "required": false, "notes": "主区顶部渐变遮罩。26.727.40816 提供 data-app-shell-main-content-top-fade 并使用 _MainContentTopFade_ CSS Module；用于在主题背景下移除原生白色 fade。26.924 把该属性从遮罩层移到了包裹整条路由的容器上，裸属性会连带命中 thread 滚动容器与 composer，导致任意会话右栏空白（#415/#414）。属性形式因此限定为无子元素的原生遮罩层，两个旧 class 形式保持不变" },
     { "key": "home-icon", "selector": "[data-testid=\"home-icon\"]", "tier": "L1", "scope": "home", "required": true, "notes": "首页判定信号，双端一致" },
