@@ -3,7 +3,7 @@
 # 灰泽满 Hazel · Codex 主题
 
 给 Codex / ChatGPT 桌面端换上灰泽满的皮肤，macOS 与 Windows 都能用。<br>
-以她的代表色 `#D3D3D3` 为底，绿冻色作交互强调，配官方立绘与语录。
+以代表色 `#D3D3D3` 为底，绿冻色作交互强调，配官方立绘与语录。
 
 <sub>非官方项目 · 与 OpenAI 无关 · 基于 <a href="https://github.com/Fei-Away/Codex-Dream-Skin">Codex Dream Skin</a></sub>
 
@@ -13,6 +13,8 @@
 
 ## 视觉效果如下：
 
+### macOS
+
 Codex 首页，深色与浅色跟随应用自动切换：
 
 <div align="center">
@@ -20,11 +22,27 @@ Codex 首页，深色与浅色跟随应用自动切换：
   <img src="docs/images/hazel/codex-home-light.png" width="49%" alt="Codex 首页 浅色">
 </div>
 
-切到 ChatGPT 侧同样生效，聊天与工作模式都覆盖：
+切到 ChatGPT 侧同样生效，聊天与工作模式均可：
 
 <div align="center">
   <img src="docs/images/hazel/chatgpt-chat-light.png" width="49%" alt="ChatGPT 聊天 浅色">
   <img src="docs/images/hazel/chatgpt-work-dark.png" width="49%" alt="ChatGPT 工作 深色">
+</div>
+
+### Windows
+
+Codex 首页的深色与浅色效果：保留 Windows 顶部菜单；侧栏与内容区采用直角边框，主卡片搭配立绘、贴纸和满神语录。
+
+<div align="center">
+  <img src="docs/images/hazel/windows-home-dark.png" width="49%" alt="Windows Codex 首页 深色">
+  <img src="docs/images/hazel/windows-home-light.png" width="49%" alt="Windows Codex 首页 浅色">
+</div>
+
+切到 ChatGPT 侧：
+
+<div align="center">
+  <img src="docs/images/hazel/windows-chatgpt-chat-light.png" width="49%" alt="Windows ChatGPT 聊天 浅色">
+  <img src="docs/images/hazel/windows-chatgpt-work-dark.png" width="49%" alt="Windows ChatGPT 工作 深色">
 </div>
 
 ---
@@ -54,8 +72,7 @@ curl -fsSL https://raw.githubusercontent.com/Aavalon-sys/Codex-Dream-Skin/main/i
 
 ## 主题内容
 
-**配色**取自角色本身：代表色 `#D3D3D3` 浅灰做基底，粉丝名「绿冻」对应的 `#5C968E` 作强调色，
-点缀色来自立绘上风纪袖章的樱桃红。深色与浅色两套色板独立调过，跟随 Codex 的外观设置自动切换。
+**配色**取自角色本身：代表色 `#D3D3D3` 浅灰做基底，粉丝名「绿冻」对应的 `#5C968E` 作强调色，点缀色来自立绘上风纪袖章的樱桃红。深色与浅色两套色板跟随 Codex 的外观设置自动切换。
 
 **文案**：
 
@@ -64,12 +81,12 @@ curl -fsSL https://raw.githubusercontent.com/Aavalon-sys/Codex-Dream-Skin/main/i
 - 语录 —— 又怎么了我的大绿冻……
 - 标题栏 —— 🩶 灰泽满 Hazel · 绿冻工作台
 
-这些都在 `macos/assets/theme.json` 里，改完重新应用即可，不用碰 CSS。
+如需修改，在 `macos/assets/theme.json` 里改完重新应用即可。
 
 **界面**：Codex 首页的主卡片带立绘和 Q 版贴纸；ChatGPT 首页、聊天、工作页右侧是半透明立绘，底部渐隐。
 
 - macOS —— 侧栏与内容区是圆角面板，主卡片在窗口变矮时自动收缩，侧栏收起时标题栏里的品牌字自动隐藏
-- Windows —— 侧栏与内容区采用直角边框，顶部品牌字避开菜单，聊天区上下渐隐统一底色，窗口变窄时自动隐藏品牌字
+- Windows —— 侧栏与内容区采用直角边框，顶部品牌字避开菜单，聊天区上下渐隐统一底色，窗口变窄时自动隐藏标题栏
 
 ---
 
@@ -104,7 +121,6 @@ curl -fsSL https://raw.githubusercontent.com/Aavalon-sys/Codex-Dream-Skin/main/i
 ## 致谢
 
 上游项目 [Fei-Away/Codex-Dream-Skin](https://github.com/Fei-Away/Codex-Dream-Skin)
-——注入器、安装流程、主题契约都出自那里，这个 fork 只是在它之上做了一套灰泽满配色与版式。
 
 角色：**灰泽满 Hazel**（VirtuaReal 二十七期）·
 [B 站](https://space.bilibili.com/1298779265) ·
